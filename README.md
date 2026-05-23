@@ -1,6 +1,5 @@
 ## README.md
 
-```markdown
 # 🎯 网页操作执行器 (Web Action Executor)
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
