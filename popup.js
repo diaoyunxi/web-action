@@ -623,7 +623,8 @@ class OperationManager {
     const map = {
       'field-selector': 'selector', 'field-value': 'value',
       'field-position': 'position', 'field-delay': 'delay',
-      'field-description': 'description', 'field-waitSelector': 'waitSelector'
+      'field-description': 'description', 'field-waitSelector': 'waitSelector',
+      'field-waitTimeout': 'waitTimeout'
     };
 
     Object.entries(map).forEach(([cls, prop]) => {

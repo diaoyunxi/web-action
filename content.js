@@ -133,19 +133,18 @@ class OperationExecutor {
   }
 
   dispatchInputEvents(element, value) {
-    // 原生事件
-    ['input', 'change'].forEach(eventType => {
-      element.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
-    });
-
-    // React兼容
     const nativeSetter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype, 'value'
     )?.set;
     if (nativeSetter) {
       nativeSetter.call(element, value);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      element.value = value;
     }
+
+    ['input', 'change'].forEach(eventType => {
+      element.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
+    });
   }
 
   // ==================== 点击操作 ====================
@@ -231,8 +230,7 @@ class OperationExecutor {
         break;
         
       case 'hard':
-        // 强制刷新
-        window.location.reload(true);
+        window.location.reload();
         break;
         
       case 'waitElement':
