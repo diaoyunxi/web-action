@@ -10,14 +10,14 @@
   <div class="container">
     <div class="header">
       <h2>🎯 网页操作执行器</h2>
-      <span class="version">v1.2.1</span>
+      <span class="version">v1.3.0</span>
     </div>
-    
+
     <!-- 操作列表 -->
     <div class="operations-list" id="operationsList">
       <!-- 动态生成 -->
     </div>
-    
+
     <!-- 重复执行控制 -->
     <div class="repeat-controls">
       <div class="repeat-header">
@@ -26,7 +26,7 @@
           <span>🔄 启用重复执行</span>
         </label>
       </div>
-      
+
       <div class="repeat-settings" id="repeatSettings" style="display: none;">
         <div class="repeat-row">
           <div class="repeat-mode">
@@ -42,7 +42,7 @@
             <input type="number" id="repeatCount" value="3" min="1" max="9999">
           </div>
         </div>
-        
+
         <div class="repeat-condition" id="repeatConditionGroup" style="display: none;">
           <label>停止条件</label>
           <select id="conditionType">
@@ -55,14 +55,14 @@
             <input type="number" id="conditionTimeout" value="30000" min="1000">
           </div>
         </div>
-        
+
         <div class="repeat-row">
           <div class="repeat-interval">
             <label>间隔(ms)</label>
             <input type="number" id="repeatInterval" value="2000" min="0" max="300000">
           </div>
         </div>
-        
+
         <div class="repeat-options">
           <label class="checkbox-label">
             <input type="checkbox" id="stopOnError" checked>
@@ -75,8 +75,8 @@
         </div>
       </div>
     </div>
-    
-    <!-- 操作按钮 -->
+
+    <!-- 操作按钮（新增：等待/选择） -->
     <div class="controls">
       <button id="addInput" class="btn btn-primary" title="添加输入操作">
         <span class="btn-icon">📝</span> 输入
@@ -90,8 +90,14 @@
       <button id="addRefresh" class="btn btn-refresh" title="添加刷新操作">
         <span class="btn-icon">🔄</span> 刷新
       </button>
+      <button id="addWait" class="btn btn-wait" title="添加等待操作">
+        <span class="btn-icon">⏳</span> 等待
+      </button>
+      <button id="addSelect" class="btn btn-select" title="添加下拉选择操作">
+        <span class="btn-icon">📋</span> 选择
+      </button>
     </div>
-    
+
     <!-- 执行控制 -->
     <div class="action-controls">
       <button id="executeAll" class="btn btn-execute">
@@ -104,7 +110,7 @@
         🗑 清空
       </button>
     </div>
-    
+
     <!-- 进度显示 -->
     <div class="progress-container" id="progressContainer" style="display: none;">
       <div class="progress-info">
@@ -115,10 +121,10 @@
         <div class="progress-fill" id="progressFill"></div>
       </div>
     </div>
-    
+
     <!-- 状态信息 -->
     <div class="status" id="status"></div>
-    
+
     <!-- 预设模板 -->
     <div class="presets">
       <h4>📋 快速预设</h4>
@@ -129,13 +135,39 @@
         <button id="presetRepeat" class="btn btn-preset">重复刷新</button>
       </div>
     </div>
-    
+
+    <!-- 导入导出 -->
+    <div class="io-section">
+      <h4>💾 配置管理</h4>
+      <div class="io-buttons">
+        <button id="exportConfig" class="btn btn-io">⬇ 导出配置</button>
+        <button id="importConfig" class="btn btn-io">⬆ 导入配置</button>
+        <input type="file" id="importFile" accept=".json" style="display:none">
+      </div>
+      <div class="var-hint">
+        💡 支持变量: <code>{{timestamp}}</code> <code>{{date}}</code> <code>{{random}}</code> <code>{{uuid}}</code> <code>{{loopIndex}}</code>
+      </div>
+    </div>
+
+    <!-- 执行日志 -->
+    <div class="log-section">
+      <div class="log-header">
+        <h4>📜 执行日志</h4>
+        <button id="clearLog" class="btn btn-mini">清空</button>
+      </div>
+      <div class="log-container" id="logContainer">
+        <div class="log-empty">暂无日志</div>
+      </div>
+    </div>
+
     <!-- 底部信息 -->
     <div class="footer">
       <a href="#" id="helpLink">📖 使用帮助</a>
+      <span class="footer-sep">|</span>
+      <span class="shortcut-info">快捷键: Ctrl+Shift+E 执行 / Ctrl+Shift+S 停止</span>
     </div>
   </div>
-  
+
   <script src="popup.js"></script>
 </body>
 </html>

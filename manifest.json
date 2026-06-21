@@ -1,9 +1,8 @@
-
 {
   "manifest_version": 3,
   "name": "网页操作执行器",
-  "version": "1.2.1",
-  "description": "在网页中按顺序执行输入、点击、滑动、刷新操作，支持重复执行和条件循环",
+  "version": "1.3.0",
+  "description": "在网页中按顺序执行输入、点击、滑动、刷新、等待、选择操作，支持重复执行、条件循环、变量和配置导入导出",
   "author": "Web Action Executor",
   "homepage_url": "https://github.com/your-repo/web-action-executor",
   "icons": {
@@ -14,7 +13,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "commands"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -34,6 +34,22 @@
   ],
   "background": {
     "service_worker": "background.js"
+  },
+  "commands": {
+    "execute-operations": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "执行保存的操作"
+    },
+    "stop-execution": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "停止执行"
+    }
   },
   "minimum_chrome_version": "88"
 }
