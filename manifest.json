@@ -2,7 +2,7 @@
 {
   "manifest_version": 3,
   "name": "网页操作执行器",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "在网页中按顺序执行输入、点击、滑动、刷新操作，支持重复执行和条件循环",
   "author": "Web Action Executor",
   "homepage_url": "https://github.com/your-repo/web-action-executor",
