@@ -1,7 +1,7 @@
 /**
- * 网页操作执行器 - 内容脚本 v1.3.0
+ * 网页操作执行器 - 内容脚本 v1.4.0
  * 在目标页面中执行实际操作
- * 支持: 输入、点击、滑动、刷新、等待、选择 及 变量替换
+ * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取 及 变量替换、元素拾取
  */
 
 class OperationExecutor {
@@ -9,6 +9,8 @@ class OperationExecutor {
     this.shouldStop = false;
     this.repeatConfig = null;
     this.loopIndex = 0;
+    this.pickerMode = false;
+    this.pickerCallback = null;
     this.initMessageListener();
     this.checkRefreshWait();
   }
@@ -50,8 +52,219 @@ class OperationExecutor {
         case 'ping':
           sendResponse({ pong: true });
           return true;
+
+        case 'startPicker':
+          this.startElementPicker(request.targetField);
+          sendResponse({ success: true, message: '拾取模式已启动' });
+          return true;
+
+        case 'stopPicker':
+          this.stopElementPicker();
+          sendResponse({ success: true });
+          return true;
       }
     });
+  }
+
+  // ==================== 元素拾取器 ====================
+
+  startElementPicker(targetField) {
+    this.pickerMode = true;
+    this.pickerTargetField = targetField;
+
+    // 创建拾取提示
+    this.createPickerOverlay();
+
+    // 添加鼠标事件监听
+    document.addEventListener('mouseover', this.handlePickerHover.bind(this), true);
+    document.addEventListener('mouseout', this.handlePickerOut.bind(this), true);
+    document.addEventListener('click', this.handlePickerClick.bind(this), true);
+
+    console.log('🎯 元素拾取模式已启动');
+  }
+
+  stopElementPicker() {
+    this.pickerMode = false;
+    this.pickerTargetField = null;
+
+    // 移除拾取提示
+    this.removePickerOverlay();
+
+    // 移除鼠标事件监听
+    document.removeEventListener('mouseover', this.handlePickerHover.bind(this), true);
+    document.removeEventListener('mouseout', this.handlePickerOut.bind(this), true);
+    document.removeEventListener('click', this.handlePickerClick.bind(this), true);
+
+    console.log('🎯 元素拾取模式已停止');
+  }
+
+  createPickerOverlay() {
+    // 创建顶部提示条
+    const overlay = document.createElement('div');
+    overlay.id = '__executor_picker_overlay__';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: linear-gradient(135deg, #FF9800, #F57C00);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 2147483647;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    overlay.innerHTML = '🎯 点击页面元素获取选择器 | 按 ESC 取消';
+    document.body.appendChild(overlay);
+
+    // 创建高亮框
+    const highlight = document.createElement('div');
+    highlight.id = '__executor_picker_highlight__';
+    highlight.style.cssText = `
+      position: fixed;
+      border: 2px solid #FF9800;
+      background: rgba(255, 152, 0, 0.1);
+      pointer-events: none;
+      z-index: 2147483646;
+      transition: all 0.1s ease;
+      display: none;
+    `;
+    document.body.appendChild(highlight);
+
+    // 监听 ESC 键取消
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.pickerMode) {
+        this.stopElementPicker();
+        chrome.runtime.sendMessage({ action: 'pickerCancelled' });
+      }
+    }, true);
+  }
+
+  removePickerOverlay() {
+    const overlay = document.getElementById('__executor_picker_overlay__');
+    const highlight = document.getElementById('__executor_picker_highlight__');
+    if (overlay) overlay.remove();
+    if (highlight) highlight.remove();
+  }
+
+  handlePickerHover(e) {
+    if (!this.pickerMode) return;
+    e.stopPropagation();
+
+    const element = e.target;
+    if (element.id === '__executor_picker_overlay__' || 
+        element.id === '__executor_picker_highlight__') return;
+
+    const rect = element.getBoundingClientRect();
+    const highlight = document.getElementById('__executor_picker_highlight__');
+
+    if (highlight) {
+      highlight.style.display = 'block';
+      highlight.style.top = rect.top + 'px';
+      highlight.style.left = rect.left + 'px';
+      highlight.style.width = rect.width + 'px';
+      highlight.style.height = rect.height + 'px';
+    }
+  }
+
+  handlePickerOut(e) {
+    if (!this.pickerMode) return;
+    const highlight = document.getElementById('__executor_picker_highlight__');
+    if (highlight) highlight.style.display = 'none';
+  }
+
+  handlePickerClick(e) {
+    if (!this.pickerMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const element = e.target;
+    if (element.id === '__executor_picker_overlay__' || 
+        element.id === '__executor_picker_highlight__') return;
+
+    const selector = this.generateSelector(element);
+    console.log('✅ 已获取选择器:', selector);
+
+    // 发送选择器到 popup
+    chrome.runtime.sendMessage({
+      action: 'pickerResult',
+      selector: selector,
+      elementInfo: {
+        tagName: element.tagName.toLowerCase(),
+        id: element.id || null,
+        className: element.className || null,
+        text: element.textContent?.substring(0, 50) || null
+      }
+    });
+
+    this.stopElementPicker();
+  }
+
+  generateSelector(element) {
+    // 优先使用 ID
+    if (element.id) {
+      return '#' + CSS.escape(element.id);
+    }
+
+    // 尝试使用唯一的属性
+    const uniqueAttrs = ['name', 'data-id', 'data-name', 'aria-label', 'title', 'placeholder'];
+    for (const attr of uniqueAttrs) {
+      const value = element.getAttribute(attr);
+      if (value) {
+        const selector = `${element.tagName.toLowerCase()}[${attr}="${CSS.escape(value)}"]`;
+        if (document.querySelectorAll(selector).length === 1) {
+          return selector;
+        }
+      }
+    }
+
+    // 使用类名组合
+    if (element.className && typeof element.className === 'string') {
+      const classes = element.className.split(' ').filter(c => c && !c.includes(':'));
+      if (classes.length > 0) {
+        // 尝试找到唯一的类名组合
+        for (let i = classes.length; i > 0; i--) {
+          const classSelector = '.' + classes.slice(0, i).map(c => CSS.escape(c)).join('.');
+          const fullSelector = element.tagName.toLowerCase() + classSelector;
+          if (document.querySelectorAll(fullSelector).length === 1) {
+            return fullSelector;
+          }
+        }
+      }
+    }
+
+    // 使用路径选择器
+    const path = this.getElementPath(element);
+    return path;
+  }
+
+  getElementPath(element) {
+    const path = [];
+    let current = element;
+
+    while (current && current !== document.body) {
+      let selector = current.tagName.toLowerCase();
+
+      // 添加索引
+      const parent = current.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(c => c.tagName === current.tagName);
+        if (siblings.length > 1) {
+          const index = siblings.indexOf(current) + 1;
+          selector += `:nth-of-type(${index})`;
+        }
+      }
+
+      path.unshift(selector);
+      current = parent;
+    }
+
+    return path.join(' > ');
   }
 
   // ==================== 操作执行引擎 ====================
@@ -99,6 +312,8 @@ class OperationExecutor {
       case 'refresh': await this.executeRefresh(operation); break;
       case 'wait':    await this.executeWait(operation); break;
       case 'select':  await this.executeSelect(operation); break;
+      case 'script':  await this.executeScript(operation); break;
+      case 'extract': await this.executeExtract(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -404,6 +619,119 @@ class OperationExecutor {
     element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
 
     this.highlightElement(element, '#FF9800');
+  }
+
+  // ==================== 脚本执行操作 ====================
+
+  async executeScript(operation) {
+    const scriptCode = operation.scriptCode || '';
+    if (!scriptCode.trim()) {
+      throw new Error('脚本内容为空');
+    }
+
+    // 变量替换
+    const processedScript = this.substituteVariables(scriptCode);
+
+    try {
+      // 创建执行上下文
+      const context = {
+        loopIndex: this.loopIndex || 1,
+        document: document,
+        window: window,
+        selector: operation.selector || '',
+        findElement: (sel) => this.findElement(sel),
+        sleep: (ms) => this.sleep(ms)
+      };
+
+      // 使用 Function 构造器执行脚本
+      const fn = new Function('context', `
+        with(context) {
+          ${processedScript}
+        }
+      `);
+
+      const result = fn(context);
+
+      console.log('✅ 脚本执行完成', result !== undefined ? `结果: ${result}` : '');
+      
+      // 如果脚本返回值，发送到 popup
+      if (result !== undefined && result !== null) {
+        chrome.runtime.sendMessage({
+          action: 'scriptResult',
+          result: String(result),
+          operationId: operation.id
+        });
+      }
+
+    } catch (error) {
+      throw new Error(`脚本执行错误: ${error.message}`);
+    }
+  }
+
+  // ==================== 元素提取操作 ====================
+
+  async executeExtract(operation) {
+    const element = this.findElement(operation.selector);
+
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(200);
+
+    const extractType = operation.extractType || 'text';
+    let extractedValue = '';
+
+    switch (extractType) {
+      case 'text':
+        extractedValue = element.textContent?.trim() || '';
+        break;
+
+      case 'innerHtml':
+        extractedValue = element.innerHTML || '';
+        break;
+
+      case 'outerHtml':
+        extractedValue = element.outerHTML || '';
+        break;
+
+      case 'value':
+        extractedValue = element.value || '';
+        break;
+
+      case 'attribute':
+        const attrName = operation.extractAttribute || 'class';
+        extractedValue = element.getAttribute(attrName) || '';
+        break;
+
+      case 'href':
+        extractedValue = element.href || element.getAttribute('href') || '';
+        break;
+
+      case 'src':
+        extractedValue = element.src || element.getAttribute('src') || '';
+        break;
+
+      default:
+        extractedValue = element.textContent?.trim() || '';
+    }
+
+    // 截取前200字符
+    const displayValue = extractedValue.substring(0, 200);
+    console.log(`✅ 提取成功 (${extractType}): ${displayValue}`);
+
+    // 高亮元素
+    this.highlightElement(element, '#9C27B0');
+
+    // 发送提取结果到 popup
+    chrome.runtime.sendMessage({
+      action: 'extractResult',
+      value: extractedValue,
+      extractType: extractType,
+      selector: operation.selector,
+      operationId: operation.id
+    });
   }
 
   // ==================== 辅助等待方法 ====================

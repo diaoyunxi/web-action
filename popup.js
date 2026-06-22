@@ -1,6 +1,6 @@
 /**
- * 网页操作执行器 - 弹出窗口脚本 v1.3.0
- * 新增: 等待操作、下拉选择操作、变量替换、配置导入导出、执行日志、快捷键支持
+ * 网页操作执行器 - 弹出窗口脚本 v1.4.0
+ * 新增: 元素拾取器、脚本执行、元素提取、等待操作、下拉选择操作、变量替换、配置导入导出、执行日志、快捷键支持
  */
 
 class OperationManager {
@@ -11,6 +11,8 @@ class OperationManager {
     this.currentRepeat = 0;
     this.totalRepeats = 0;
     this.logs = [];
+    this.pickerMode = false;
+    this.pendingPickerField = null;
     this.init();
   }
 
@@ -21,6 +23,7 @@ class OperationManager {
     this.initEventListeners();
     this.renderOperations();
     this.renderLogs();
+    await this.checkPendingPickerResult();
   }
 
   // ==================== 数据持久化 ====================
@@ -125,6 +128,8 @@ class OperationManager {
     document.getElementById('addRefresh').addEventListener('click', () => this.addOperation('refresh'));
     document.getElementById('addWait').addEventListener('click', () => this.addOperation('wait'));
     document.getElementById('addSelect').addEventListener('click', () => this.addOperation('select'));
+    document.getElementById('addScript').addEventListener('click', () => this.addOperation('script'));
+    document.getElementById('addExtract').addEventListener('click', () => this.addOperation('extract'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -182,12 +187,20 @@ class OperationManager {
       this.showStatus('✅ 日志已清空', 'success');
     });
 
-    // 监听后台快捷键消息
+    // 监听后台快捷键消息和拾取器消息
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'shortcut-execute') {
         this.executeAllOperations();
       } else if (request.action === 'shortcut-stop') {
         this.stopExecution();
+      } else if (request.action === 'pickerResult') {
+        this.handlePickerResult(request);
+      } else if (request.action === 'pickerCancelled') {
+        this.handlePickerCancelled();
+      } else if (request.action === 'extractResult') {
+        this.handleExtractResult(request);
+      } else if (request.action === 'scriptResult') {
+        this.handleScriptResult(request);
       }
     });
   }
@@ -196,6 +209,94 @@ class OperationManager {
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ==================== 元素拾取器 ====================
+
+  async startPicker(fieldId) {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) {
+        this.showStatus('未找到活动标签页', 'error');
+        return;
+      }
+
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
+        this.showStatus('无法在浏览器内部页面拾取元素', 'error');
+        return;
+      }
+
+      this.pickerMode = true;
+      this.pendingPickerField = fieldId;
+
+      await this.ensureContentScriptInjected(tab);
+      await chrome.tabs.sendMessage(tab.id, { action: 'startPicker', targetField: fieldId });
+
+      this.showStatus('🎯 请在页面中点击目标元素', 'info');
+      this.addLog('info', '启动元素拾取器');
+
+      // 关闭 popup 让用户点击页面
+      window.close();
+    } catch (error) {
+      console.error('启动拾取器失败:', error);
+      this.showStatus(`启动拾取器失败: ${error.message}`, 'error');
+    }
+  }
+
+  handlePickerResult(request) {
+    this.pickerMode = false;
+
+    // 保存选择器到 storage，下次打开 popup 时应用
+    chrome.storage.local.set({
+      pendingPickerSelector: request.selector,
+      pendingPickerField: this.pendingPickerField
+    });
+
+    console.log('✅ 拾取成功:', request.selector);
+    this.addLog('success', `拾取成功: ${request.selector}`);
+  }
+
+  handlePickerCancelled() {
+    this.pickerMode = false;
+    this.pendingPickerField = null;
+    this.addLog('warning', '拾取已取消');
+  }
+
+  // 检查是否有待应用的拾取结果
+  async checkPendingPickerResult() {
+    try {
+      const result = await chrome.storage.local.get(['pendingPickerSelector', 'pendingPickerField']);
+      if (result.pendingPickerSelector && result.pendingPickerField) {
+        // 应用选择器到对应字段
+        const fieldId = result.pendingPickerField;
+        const input = document.querySelector(`[data-picker-target="${fieldId}"]`);
+        if (input) {
+          input.value = result.pendingPickerSelector;
+          // 触发 change 事件更新数据
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // 清除临时数据
+        chrome.storage.local.remove(['pendingPickerSelector', 'pendingPickerField']);
+
+        this.showStatus(`✅ 已应用选择器: ${result.pendingPickerSelector}`, 'success');
+      }
+    } catch (error) {
+      console.error('检查拾取结果失败:', error);
+    }
+  }
+
+  // ==================== 结果处理 ====================
+
+  handleExtractResult(request) {
+    const valuePreview = request.value.substring(0, 100);
+    this.addLog('success', `提取成功 (${request.extractType}): ${valuePreview}${request.value.length > 100 ? '...' : ''}`);
+    console.log('提取结果:', request.value);
+  }
+
+  handleScriptResult(request) {
+    this.addLog('success', `脚本返回: ${request.result}`);
+    console.log('脚本结果:', request.result);
   }
 
   // 【核心修复】确保 content script 已注入
@@ -271,7 +372,9 @@ class OperationManager {
       scroll: { ...baseOperation, type: 'scroll', position: 500, behavior: 'smooth', description: '滚动页面' },
       refresh: { ...baseOperation, type: 'refresh', refreshType: 'normal', waitSelector: '', waitTimeout: 5000, description: '刷新页面' },
       wait: { ...baseOperation, type: 'wait', waitType: 'fixed', waitDuration: 2000, waitSelector: '', waitTimeout: 10000, description: '等待' },
-      select: { ...baseOperation, type: 'select', selector: '', selectType: 'value', selectValue: '', description: '下拉选择' }
+      select: { ...baseOperation, type: 'select', selector: '', selectType: 'value', selectValue: '', description: '下拉选择' },
+      script: { ...baseOperation, type: 'script', scriptCode: '', description: '执行脚本' },
+      extract: { ...baseOperation, type: 'extract', selector: '', extractType: 'text', extractAttribute: '', description: '提取元素' }
     };
 
     if (typeMap[type]) {
@@ -737,13 +840,18 @@ class OperationManager {
   renderFields(op) {
     let fields = '';
 
+    const pickerButton = (fieldId) => `
+      <button class="btn-picker" onclick="manager.startPicker('${fieldId}')" title="点击拾取页面元素">
+        🎯
+      </button>`;
+
     switch (op.type) {
       case 'input':
         fields = `
           <div class="field-row">
             <div class="field-group flex-2">
-              <label>CSS选择器</label>
-              <input type="text" class="field-selector" data-id="${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#id, .class">
+              <label>CSS选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#id, .class">
             </div>
             <div class="field-group flex-2">
               <label>输入内容 (支持变量)</label>
@@ -754,8 +862,10 @@ class OperationManager {
 
       case 'click':
         fields = `<div class="field-group">
-          <label>CSS选择器</label>
-          <input type="text" class="field-selector" data-id="${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#btn, .submit">
+          <label>CSS选择器 ${pickerButton(`selector-${op.id}`)}</label>
+          <div class="input-with-picker">
+            <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#btn, .submit">
+          </div>
         </div>`;
         break;
 
@@ -789,8 +899,8 @@ class OperationManager {
           ${op.refreshType === 'waitElement' ? `
           <div class="field-row">
             <div class="field-group flex-2">
-              <label>等待元素</label>
-              <input type="text" class="field-waitSelector" data-id="${op.id}" value="${this.escapeHtml(op.waitSelector || '')}" placeholder=".success">
+              <label>等待元素 ${pickerButton(`waitSelector-${op.id}`)}</label>
+              <input type="text" class="field-waitSelector" data-id="${op.id}" data-picker-target="waitSelector-${op.id}" value="${this.escapeHtml(op.waitSelector || '')}" placeholder=".success">
             </div>
             <div class="field-group flex-1">
               <label>超时(ms)</label>
@@ -819,8 +929,8 @@ class OperationManager {
           </div>` : `
           <div class="field-row">
             <div class="field-group flex-2">
-              <label>元素选择器</label>
-              <input type="text" class="field-waitSelectorOp" data-id="${op.id}" value="${this.escapeHtml(op.waitSelector || '')}" placeholder="#target">
+              <label>元素选择器 ${pickerButton(`waitSelectorOp-${op.id}`)}</label>
+              <input type="text" class="field-waitSelectorOp" data-id="${op.id}" data-picker-target="waitSelectorOp-${op.id}" value="${this.escapeHtml(op.waitSelector || '')}" placeholder="#target">
             </div>
             <div class="field-group flex-1">
               <label>超时(ms)</label>
@@ -833,8 +943,8 @@ class OperationManager {
         fields = `
           <div class="field-row">
             <div class="field-group flex-2">
-              <label>下拉元素选择器</label>
-              <input type="text" class="field-selector" data-id="${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="select#city">
+              <label>下拉元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="select#city">
             </div>
             <div class="field-group flex-1">
               <label>选择方式</label>
@@ -851,6 +961,45 @@ class OperationManager {
               <input type="text" class="field-selectValue" data-id="${op.id}" value="${this.escapeHtml(op.selectValue || '')}" placeholder="1 或 Beijing">
             </div>
           </div>`;
+        break;
+
+      case 'script':
+        fields = `
+          <div class="field-group">
+            <label>JavaScript 代码 (支持变量)</label>
+            <textarea class="field-scriptCode" data-id="${op.id}" rows="4" placeholder="return document.title; 或 findElement('#btn').click();">${this.escapeHtml(op.scriptCode || '')}</textarea>
+          </div>
+          <div class="script-hint">
+            💡 可用变量: <code>{{loopIndex}}</code> <code>{{timestamp}}</code> | 可用函数: <code>findElement(selector)</code> <code>sleep(ms)</code>
+          </div>`;
+        break;
+
+      case 'extract':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target">
+            </div>
+            <div class="field-group flex-1">
+              <label>提取类型</label>
+              <select class="field-extractType" data-id="${op.id}">
+                <option value="text" ${op.extractType === 'text' ? 'selected' : ''}>文本内容</option>
+                <option value="innerHtml" ${op.extractType === 'innerHtml' ? 'selected' : ''}>内部HTML</option>
+                <option value="value" ${op.extractType === 'value' ? 'selected' : ''}>输入值</option>
+                <option value="attribute" ${op.extractType === 'attribute' ? 'selected' : ''}>属性值</option>
+                <option value="href" ${op.extractType === 'href' ? 'selected' : ''}>链接地址</option>
+                <option value="src" ${op.extractType === 'src' ? 'selected' : ''}>图片地址</option>
+              </select>
+            </div>
+          </div>
+          ${op.extractType === 'attribute' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>属性名称</label>
+              <input type="text" class="field-extractAttribute" data-id="${op.id}" value="${this.escapeHtml(op.extractAttribute || '')}" placeholder="class, data-id...">
+            </div>
+          </div>` : ''}`;
         break;
     }
 
@@ -881,7 +1030,9 @@ class OperationManager {
       'field-waitTimeout': 'waitTimeout',
       'field-waitTimeoutOp': 'waitTimeout',
       'field-waitSelectorOp': 'waitSelector',
-      'field-selectValue': 'selectValue'
+      'field-selectValue': 'selectValue',
+      'field-scriptCode': 'scriptCode',
+      'field-extractAttribute': 'extractAttribute'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -894,6 +1045,13 @@ class OperationManager {
           }
           this.updateOperation(id, prop, val);
         });
+        // textarea 需要监听 input 事件
+        if (input.tagName === 'TEXTAREA') {
+          input.addEventListener('input', (e) => {
+            const id = parseInt(e.target.dataset.id);
+            this.updateOperation(id, prop, e.target.value);
+          });
+        }
       });
     });
 
@@ -917,6 +1075,13 @@ class OperationManager {
 
     document.querySelectorAll('.field-selectType').forEach(s => {
       s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'selectType', e.target.value));
+    });
+
+    document.querySelectorAll('.field-extractType').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'extractType', e.target.value);
+        this.renderOperations();
+      });
     });
   }
 
@@ -945,7 +1110,7 @@ class OperationManager {
   }
 
   getIcon(type) {
-    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋' };
+    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍' };
     return icons[type] || '❓';
   }
 
@@ -979,7 +1144,7 @@ class OperationManager {
   }
 
   showHelp() {
-    alert(`📖 使用帮助 v1.3.0
+    alert(`📖 使用帮助 v1.4.0
 
 【操作类型】
 📝 输入   - 填写表单内容 (支持变量)
@@ -988,6 +1153,13 @@ class OperationManager {
 🔄 刷新   - 重新加载页面
 ⏳ 等待   - 等待固定时长 / 元素出现 / 元素消失
 📋 选择   - 操作下拉列表 (按值/索引/文本)
+⚡ 脚本   - 执行自定义 JavaScript
+🔍 提取   - 获取元素文本/属性值
+
+【元素拾取器】
+点击 🎯 按钮可进入拾取模式
+在页面中点击元素自动获取选择器
+按 ESC 取消拾取
 
 【选择器】
 CSS选择器: #id .class [name="x"]
@@ -998,9 +1170,13 @@ XPath: //button[contains(text(),'登录')]
 {{date}}       - 当前日期 YYYY-MM-DD
 {{datetime}}   - 当前日期时间
 {{random}}     - 0-1 的随机数
-{{randomInt:min:max}} - 范围内随机整数 (例: {{randomInt:1:100}})
+{{randomInt:min:max}} - 范围内随机整数
 {{uuid}}       - 随机 UUID
 {{loopIndex}}  - 当前循环次数 (从1开始)
+
+【脚本执行】
+可用函数: findElement(selector), sleep(ms)
+可用变量: loopIndex, document, window
 
 【重复】
 指定次数 / 无限循环 / 条件循环

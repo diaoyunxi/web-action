@@ -1,4 +1,4 @@
-/* ==================== 基础样式 v1.3.0 ==================== */
+/* ==================== 基础样式 v1.4.0 ==================== */
 
 * {
   margin: 0;
@@ -122,6 +122,8 @@ body {
 .type-refresh { background: #FFF8E1; color: #F57F17; }
 .type-wait    { background: #F3E5F5; color: #7B1FA2; }
 .type-select  { background: #EFEBE9; color: #5D4037; }
+.type-script  { background: #ECEFF1; color: #37474F; }
+.type-extract { background: #FCE4EC; color: #C2185B; }
 
 .operation-controls {
   display: flex;
@@ -349,7 +351,9 @@ body {
 .btn-info    { background: #00838F; color: white; }
 .btn-refresh { background: #F57F17; color: white; }
 .btn-wait    { background: #7B1FA2; color: white; }
-.btn-select   { background: #5D4037; color: white; }
+.btn-select  { background: #5D4037; color: white; }
+.btn-script  { background: #37474F; color: white; }
+.btn-extract { background: #C2185B; color: white; }
 
 .btn-execute { background: #E65100; color: white; flex: 2; font-weight: 600; font-size: 14px; }
 .btn-stop    { background: #C62828; color: white; flex: 2; font-weight: 600; font-size: 14px; animation: pulse 1.5s infinite; }
@@ -616,4 +620,72 @@ body {
 .operations-list::-webkit-scrollbar-thumb:hover,
 .log-container::-webkit-scrollbar-thumb:hover {
   background: #b0b0b0;
+}
+
+/* ==================== 元素拾取按钮 ==================== */
+
+.btn-picker {
+  background: #FF9800;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: all 0.2s;
+}
+
+.btn-picker:hover {
+  background: #F57C00;
+  transform: scale(1.1);
+}
+
+.input-with-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ==================== 脚本提示 ==================== */
+
+.script-hint {
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 5px;
+  margin-top: 4px;
+  border-left: 3px solid #37474F;
+}
+
+.script-hint code {
+  background: #fff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  color: #37474F;
+  margin: 0 1px;
+}
+
+/* ==================== 脚本代码输入框 ==================== */
+
+.field-scriptCode {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  resize: vertical;
+  min-height: 80px;
+  background: #fafafa;
+  transition: all 0.2s;
+}
+
+.field-scriptCode:focus {
+  outline: none;
+  border-color: #37474F;
+  background: white;
+  box-shadow: 0 0 0 2px rgba(55,71,79,0.1);
 }
