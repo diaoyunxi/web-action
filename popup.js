@@ -133,6 +133,12 @@ class OperationManager {
     document.getElementById('addKeyboard').addEventListener('click', () => this.addOperation('keyboard'));
     document.getElementById('addScreenshot').addEventListener('click', () => this.addOperation('screenshot'));
     document.getElementById('addClipboard').addEventListener('click', () => this.addOperation('clipboard'));
+    document.getElementById('addHttpRequest').addEventListener('click', () => this.addOperation('httpRequest'));
+    document.getElementById('addTab').addEventListener('click', () => this.addOperation('tab'));
+    document.getElementById('addNotification').addEventListener('click', () => this.addOperation('notification'));
+    document.getElementById('addCookie').addEventListener('click', () => this.addOperation('cookie'));
+    document.getElementById('addHover').addEventListener('click', () => this.addOperation('hover'));
+    document.getElementById('addDoubleClick').addEventListener('click', () => this.addOperation('doubleClick'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -204,6 +210,8 @@ class OperationManager {
         this.handleExtractResult(request);
       } else if (request.action === 'scriptResult') {
         this.handleScriptResult(request);
+      } else if (request.action === 'httpRequestResult') {
+        this.handleHttpRequestResult(request);
       }
     });
   }
@@ -302,6 +310,12 @@ class OperationManager {
     console.log('脚本结果:', request.result);
   }
 
+  handleHttpRequestResult(request) {
+    const statusEmoji = request.status >= 200 && request.status < 300 ? '✅' : '⚠️';
+    this.addLog('info', `HTTP ${request.status} - ${request.url} - ${request.preview?.substring(0, 50)}...`);
+    console.log(`HTTP请求结果: ${request.status}`, request.preview);
+  }
+
   // 【核心修复】确保 content script 已注入
   async ensureContentScriptInjected(tab) {
     try {
@@ -380,7 +394,13 @@ class OperationManager {
       extract: { ...baseOperation, type: 'extract', selector: '', extractType: 'text', extractAttribute: '', description: '提取元素' },
       keyboard: { ...baseOperation, type: 'keyboard', keyType: 'key', keyValue: 'Enter', modifierKeys: [], description: '键盘按键' },
       screenshot: { ...baseOperation, type: 'screenshot', screenshotType: 'page', selector: '', description: '页面截屏' },
-      clipboard: { ...baseOperation, type: 'clipboard', clipboardAction: 'write', clipboardValue: '', clipboardVariable: '', description: '剪贴板操作' }
+      clipboard: { ...baseOperation, type: 'clipboard', clipboardAction: 'write', clipboardValue: '', clipboardVariable: '', description: '剪贴板操作' },
+      httpRequest: { ...baseOperation, type: 'httpRequest', httpMethod: 'GET', httpUrl: '', httpHeaders: '', httpBody: '', httpSaveVariable: '', description: 'HTTP请求' },
+      tab: { ...baseOperation, type: 'tab', tabAction: 'open', tabUrl: '', description: '标签页操作' },
+      notification: { ...baseOperation, type: 'notification', notifTitle: '网页操作执行器', notifBody: '', notifDuration: 3000, description: '通知' },
+      cookie: { ...baseOperation, type: 'cookie', cookieAction: 'get', cookieName: '', cookieValue: '', cookieDomain: '', cookiePath: '/', cookieMaxAge: '', cookieVariable: '', description: 'Cookie操作' },
+      hover: { ...baseOperation, type: 'hover', selector: '', hoverDuration: 1000, description: '悬停' },
+      doubleClick: { ...baseOperation, type: 'doubleClick', selector: '', description: '双击' }
     };
 
     if (typeMap[type]) {
@@ -1085,6 +1105,152 @@ class OperationManager {
             </div>
           </div>`}`;
         break;
+
+      case 'httpRequest':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>请求方法</label>
+              <select class="field-httpMethod" data-id="${op.id}">
+                <option value="GET" ${op.httpMethod === 'GET' ? 'selected' : ''}>GET</option>
+                <option value="POST" ${op.httpMethod === 'POST' ? 'selected' : ''}>POST</option>
+                <option value="PUT" ${op.httpMethod === 'PUT' ? 'selected' : ''}>PUT</option>
+                <option value="DELETE" ${op.httpMethod === 'DELETE' ? 'selected' : ''}>DELETE</option>
+                <option value="PATCH" ${op.httpMethod === 'PATCH' ? 'selected' : ''}>PATCH</option>
+              </select>
+            </div>
+            <div class="field-group flex-2">
+              <label>请求URL (支持变量)</label>
+              <input type="text" class="field-httpUrl" data-id="${op.id}" value="${this.escapeHtml(op.httpUrl || '')}" placeholder="https://api.example.com/data">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>请求头 (每行一个, 格式: Key: Value)</label>
+            <textarea class="field-httpHeaders" data-id="${op.id}" rows="2" placeholder="Content-Type: application/json&#10;Authorization: Bearer token">${this.escapeHtml(op.httpHeaders || '')}</textarea>
+          </div>
+          ${op.httpMethod !== 'GET' ? `
+          <div class="field-group">
+            <label>请求体 (支持变量)</label>
+            <textarea class="field-httpBody" data-id="${op.id}" rows="3" placeholder='{"key": "value"}'>${this.escapeHtml(op.httpBody || '')}</textarea>
+          </div>` : ''}
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>保存响应到变量</label>
+              <input type="text" class="field-httpSaveVariable" data-id="${op.id}" value="${this.escapeHtml(op.httpSaveVariable || '')}" placeholder="responseData">
+            </div>
+          </div>
+          <div class="http-hint">💡 响应内容可通过变量引用，支持GET/POST/PUT/DELETE/PATCH</div>`;
+        break;
+
+      case 'tab':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-tabAction" data-id="${op.id}">
+                <option value="open" ${op.tabAction === 'open' ? 'selected' : ''}>打开新标签页</option>
+                <option value="close" ${op.tabAction === 'close' ? 'selected' : ''}>关闭当前标签页</option>
+                <option value="reload" ${op.tabAction === 'reload' ? 'selected' : ''}>重载当前标签页</option>
+                <option value="focus" ${op.tabAction === 'focus' ? 'selected' : ''}>聚焦当前标签页</option>
+              </select>
+            </div>
+          </div>
+          ${op.tabAction === 'open' ? `
+          <div class="field-group">
+            <label>URL地址 (支持变量)</label>
+            <input type="text" class="field-tabUrl" data-id="${op.id}" value="${this.escapeHtml(op.tabUrl || '')}" placeholder="https://example.com">
+          </div>` : ''}`;
+        break;
+
+      case 'notification':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>通知标题 (支持变量)</label>
+              <input type="text" class="field-notifTitle" data-id="${op.id}" value="${this.escapeHtml(op.notifTitle || '')}" placeholder="通知标题">
+            </div>
+            <div class="field-group flex-1">
+              <label>显示时长(ms)</label>
+              <input type="number" class="field-notifDuration" data-id="${op.id}" value="${op.notifDuration || 3000}" min="1000">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>通知内容 (支持变量)</label>
+            <input type="text" class="field-notifBody" data-id="${op.id}" value="${this.escapeHtml(op.notifBody || '')}" placeholder="通知正文内容">
+          </div>`;
+        break;
+
+      case 'cookie':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-cookieAction" data-id="${op.id}">
+                <option value="get" ${op.cookieAction === 'get' ? 'selected' : ''}>读取Cookie</option>
+                <option value="set" ${op.cookieAction === 'set' ? 'selected' : ''}>设置Cookie</option>
+                <option value="delete" ${op.cookieAction === 'delete' ? 'selected' : ''}>删除Cookie</option>
+              </select>
+            </div>
+            <div class="field-group flex-2">
+              <label>Cookie名称 (支持变量)</label>
+              <input type="text" class="field-cookieName" data-id="${op.id}" value="${this.escapeHtml(op.cookieName || '')}" placeholder="session_id">
+            </div>
+          </div>
+          ${op.cookieAction === 'set' ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>Cookie值 (支持变量)</label>
+              <input type="text" class="field-cookieValue" data-id="${op.id}" value="${this.escapeHtml(op.cookieValue || '')}" placeholder="value123">
+            </div>
+            <div class="field-group flex-1">
+              <label>过期时间(秒)</label>
+              <input type="text" class="field-cookieMaxAge" data-id="${op.id}" value="${this.escapeHtml(op.cookieMaxAge || '')}" placeholder="3600">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>域名</label>
+              <input type="text" class="field-cookieDomain" data-id="${op.id}" value="${this.escapeHtml(op.cookieDomain || '')}" placeholder=".example.com">
+            </div>
+            <div class="field-group flex-1">
+              <label>路径</label>
+              <input type="text" class="field-cookiePath" data-id="${op.id}" value="${this.escapeHtml(op.cookiePath || '/')}" placeholder="/">
+            </div>
+          </div>` : ''}
+          ${op.cookieAction === 'get' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>存储到变量</label>
+              <input type="text" class="field-cookieVariable" data-id="${op.id}" value="${this.escapeHtml(op.cookieVariable || '')}" placeholder="myCookie">
+            </div>
+          </div>` : ''}`;
+        break;
+
+      case 'hover':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>CSS选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#menu, .dropdown">
+            </div>
+            <div class="field-group flex-1">
+              <label>悬停时长(ms)</label>
+              <input type="number" class="field-hoverDuration" data-id="${op.id}" value="${op.hoverDuration || 1000}" min="100">
+            </div>
+          </div>
+          <div class="hover-hint">💡 悬停操作会触发 mouseover/mouseenter 事件，适用于下拉菜单等场景</div>`;
+        break;
+
+      case 'doubleClick':
+        fields = `
+          <div class="field-group">
+            <label>CSS选择器 ${pickerButton(`selector-${op.id}`)}</label>
+            <div class="input-with-picker">
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target, .item">
+            </div>
+          </div>
+          <div class="dblclick-hint">💡 双击操作会触发完整的鼠标事件序列和 dblclick 事件</div>`;
+        break;
     }
 
     fields += `
@@ -1120,7 +1286,21 @@ class OperationManager {
       'field-keyValue': 'keyValue',
       'field-screenshotSelector': 'selector',
       'field-clipboardValue': 'clipboardValue',
-      'field-clipboardVariable': 'clipboardVariable'
+      'field-clipboardVariable': 'clipboardVariable',
+      'field-httpUrl': 'httpUrl',
+      'field-httpHeaders': 'httpHeaders',
+      'field-httpBody': 'httpBody',
+      'field-httpSaveVariable': 'httpSaveVariable',
+      'field-tabUrl': 'tabUrl',
+      'field-notifTitle': 'notifTitle',
+      'field-notifBody': 'notifBody',
+      'field-cookieName': 'cookieName',
+      'field-cookieValue': 'cookieValue',
+      'field-cookieDomain': 'cookieDomain',
+      'field-cookiePath': 'cookiePath',
+      'field-cookieMaxAge': 'cookieMaxAge',
+      'field-cookieVariable': 'cookieVariable',
+      'field-hoverDuration': 'hoverDuration'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -1128,7 +1308,7 @@ class OperationManager {
         input.addEventListener('change', (e) => {
           const id = parseInt(e.target.dataset.id);
           let val = e.target.value;
-          if (['field-position', 'field-delay', 'field-waitDuration', 'field-waitTimeout', 'field-waitTimeoutOp'].includes(cls)) {
+          if (['field-position', 'field-delay', 'field-waitDuration', 'field-waitTimeout', 'field-waitTimeoutOp', 'field-hoverDuration'].includes(cls)) {
             val = parseInt(val) || 0;
           }
           this.updateOperation(id, prop, val);
@@ -1193,6 +1373,27 @@ class OperationManager {
       });
     });
 
+    document.querySelectorAll('.field-httpMethod').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'httpMethod', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-tabAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'tabAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-cookieAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'cookieAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
     ['field-modCtrl', 'field-modShift', 'field-modAlt'].forEach(cls => {
       document.querySelectorAll(`.${cls}`).forEach(cb => {
         cb.addEventListener('change', (e) => {
@@ -1238,7 +1439,7 @@ class OperationManager {
   }
 
   getIcon(type) {
-    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎' };
+    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎', httpRequest: '🌐', tab: '🗂', notification: '🔔', cookie: '🍪', hover: '🖱', doubleClick: '👆👆' };
     return icons[type] || '❓';
   }
 

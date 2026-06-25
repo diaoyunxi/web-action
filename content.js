@@ -317,6 +317,12 @@ class OperationExecutor {
       case 'keyboard': await this.executeKeyboard(operation); break;
       case 'screenshot': await this.executeScreenshot(operation); break;
       case 'clipboard': await this.executeClipboard(operation); break;
+      case 'httpRequest': await this.executeHttpRequest(operation); break;
+      case 'tab': await this.executeTab(operation); break;
+      case 'notification': await this.executeNotification(operation); break;
+      case 'cookie': await this.executeCookie(operation); break;
+      case 'hover': await this.executeHover(operation); break;
+      case 'doubleClick': await this.executeDoubleClick(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -819,6 +825,244 @@ class OperationExecutor {
       chrome.runtime.sendMessage({ action: 'storeData', key: varName, value: text });
       console.log(`📋 已读取剪贴板: ${text.substring(0, 30)}...`);
     }
+  }
+
+  // ==================== HTTP请求操作 ====================
+
+  async executeHttpRequest(operation) {
+    const method = (operation.httpMethod || 'GET').toUpperCase();
+    const url = this.substituteVariables(operation.httpUrl || '');
+    if (!url) throw new Error('HTTP请求URL为空');
+
+    const headers = {};
+    if (operation.httpHeaders) {
+      try {
+        const lines = operation.httpHeaders.split('\n').filter(l => l.trim());
+        for (const line of lines) {
+          const idx = line.indexOf(':');
+          if (idx > 0) {
+            headers[line.substring(0, idx).trim()] = line.substring(idx + 1).trim();
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    const fetchOptions = { method, headers };
+    if (operation.httpBody && method !== 'GET') {
+      fetchOptions.body = this.substituteVariables(operation.httpBody);
+    }
+
+    try {
+      const response = await fetch(url, fetchOptions);
+      const text = await response.text();
+      const preview = text.substring(0, 200);
+      console.log(`🌐 HTTP ${method} ${url} -> ${response.status} (${preview}...)`);
+
+      chrome.runtime.sendMessage({
+        action: 'httpRequestResult',
+        url,
+        status: response.status,
+        preview
+      });
+
+      if (operation.httpSaveVariable) {
+        chrome.runtime.sendMessage({
+          action: 'storeData',
+          key: operation.httpSaveVariable,
+          value: text
+        });
+      }
+
+      this.highlightElement(document.body, '#00BCD4');
+    } catch (error) {
+      throw new Error(`HTTP请求失败: ${error.message}`);
+    }
+  }
+
+  // ==================== 标签页操作 ====================
+
+  async executeTab(operation) {
+    const tabAction = operation.tabAction || 'open';
+
+    switch (tabAction) {
+      case 'open': {
+        const url = this.substituteVariables(operation.tabUrl || '');
+        if (!url) throw new Error('标签页URL为空');
+        chrome.runtime.sendMessage({ action: 'openTab', url });
+        console.log(`🗂 打开新标签页: ${url}`);
+        break;
+      }
+      case 'close':
+        chrome.runtime.sendMessage({ action: 'closeCurrentTab' });
+        console.log('🗂 关闭当前标签页');
+        break;
+      case 'reload':
+        window.location.reload();
+        console.log('🗂 重载标签页');
+        break;
+      case 'focus':
+        window.focus();
+        console.log('🗂 聚焦标签页');
+        break;
+      default:
+        throw new Error(`未知标签页操作: ${tabAction}`);
+    }
+  }
+
+  // ==================== 通知操作 ====================
+
+  async executeNotification(operation) {
+    const title = this.substituteVariables(operation.notifTitle || '网页操作执行器');
+    const body = this.substituteVariables(operation.notifBody || '');
+    const duration = parseInt(operation.notifDuration) || 3000;
+
+    if ('Notification' in window) {
+      if (Notification.permission === 'granted') {
+        const notif = new Notification(title, { body, icon: chrome.runtime.getURL('icons/icon128.png') });
+        setTimeout(() => notif.close(), duration);
+        console.log(`🔔 通知: ${title} - ${body}`);
+      } else if (Notification.permission !== 'denied') {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          const notif = new Notification(title, { body });
+          setTimeout(() => notif.close(), duration);
+          console.log(`🔔 通知: ${title} - ${body}`);
+        } else {
+          throw new Error('通知权限被拒绝');
+        }
+      } else {
+        // 降级为页面内提示
+        this.showInPageNotification(title, body, duration);
+      }
+    } else {
+      this.showInPageNotification(title, body, duration);
+    }
+  }
+
+  showInPageNotification(title, body, duration) {
+    const notif = document.createElement('div');
+    notif.className = '__executor_notif__';
+    notif.style.cssText = `
+      position: fixed; top: 20px; right: 20px; z-index: 2147483647;
+      background: #333; color: white; padding: 12px 20px; border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-family: -apple-system, sans-serif;
+      max-width: 300px; animation: __executor_slide_in__ 0.3s ease;
+    `;
+    notif.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${title}</div><div style="font-size:13px;opacity:0.9">${body}</div>`;
+    document.body.appendChild(notif);
+    setTimeout(() => {
+      notif.style.opacity = '0';
+      notif.style.transition = 'opacity 0.3s';
+      setTimeout(() => notif.remove(), 300);
+    }, duration);
+  }
+
+  // ==================== Cookie操作 ====================
+
+  async executeCookie(operation) {
+    const cookieAction = operation.cookieAction || 'get';
+
+    switch (cookieAction) {
+      case 'set': {
+        const name = this.substituteVariables(operation.cookieName || '');
+        const value = this.substituteVariables(operation.cookieValue || '');
+        if (!name) throw new Error('Cookie名称为空');
+        let cookieStr = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+        if (operation.cookieDomain) cookieStr += `; domain=${operation.cookieDomain}`;
+        if (operation.cookiePath) cookieStr += `; path=${operation.cookiePath}`;
+        if (operation.cookieMaxAge) cookieStr += `; max-age=${operation.cookieMaxAge}`;
+        document.cookie = cookieStr;
+        console.log(`🍪 设置Cookie: ${name}=${value}`);
+        break;
+      }
+      case 'get': {
+        const name = this.substituteVariables(operation.cookieName || '');
+        if (!name) throw new Error('Cookie名称为空');
+        const cookies = document.cookie.split(';').reduce((acc, c) => {
+          const [k, v] = c.trim().split('=');
+          acc[decodeURIComponent(k)] = decodeURIComponent(v || '');
+          return acc;
+        }, {});
+        const value = cookies[name] || '';
+        console.log(`🍪 获取Cookie: ${name}=${value}`);
+        if (operation.cookieVariable) {
+          chrome.runtime.sendMessage({ action: 'storeData', key: operation.cookieVariable, value });
+        }
+        break;
+      }
+      case 'delete': {
+        const name = this.substituteVariables(operation.cookieName || '');
+        if (!name) throw new Error('Cookie名称为空');
+        document.cookie = `${encodeURIComponent(name)}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        console.log(`🍪 删除Cookie: ${name}`);
+        break;
+      }
+    }
+  }
+
+  // ==================== 悬停操作 ====================
+
+  async executeHover(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) throw new Error(`未找到元素: ${operation.selector}`);
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(300);
+
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    element.dispatchEvent(new MouseEvent('mouseover', {
+      bubbles: true, cancelable: true, view: window, clientX: centerX, clientY: centerY
+    }));
+    element.dispatchEvent(new MouseEvent('mouseenter', {
+      bubbles: true, cancelable: true, view: window, clientX: centerX, clientY: centerY
+    }));
+
+    const hoverDuration = parseInt(operation.hoverDuration) || 1000;
+    await this.sleep(hoverDuration);
+
+    element.dispatchEvent(new MouseEvent('mouseout', {
+      bubbles: true, cancelable: true, view: window, clientX: centerX, clientY: centerY
+    }));
+    element.dispatchEvent(new MouseEvent('mouseleave', {
+      bubbles: true, cancelable: true, view: window, clientX: centerX, clientY: centerY
+    }));
+
+    this.highlightElement(element, '#FF5722');
+    console.log(`🖱 悬停: ${operation.selector} (${hoverDuration}ms)`);
+  }
+
+  // ==================== 双击操作 ====================
+
+  async executeDoubleClick(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) throw new Error(`未找到元素: ${operation.selector}`);
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(300);
+
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    const opts = {
+      bubbles: true, cancelable: true, view: window,
+      clientX: centerX, clientY: centerY, detail: 2
+    };
+
+    element.dispatchEvent(new MouseEvent('mouseover', { ...opts, detail: 1 }));
+    element.dispatchEvent(new MouseEvent('mousedown', { ...opts, detail: 1 }));
+    element.dispatchEvent(new MouseEvent('mouseup', { ...opts, detail: 1 }));
+    element.dispatchEvent(new MouseEvent('click', { ...opts, detail: 1 }));
+    element.dispatchEvent(new MouseEvent('mousedown', { ...opts, detail: 2 }));
+    element.dispatchEvent(new MouseEvent('mouseup', { ...opts, detail: 2 }));
+    element.dispatchEvent(new MouseEvent('click', { ...opts, detail: 2 }));
+    element.dispatchEvent(new MouseEvent('dblclick', opts));
+
+    this.highlightElement(element, '#E91E63');
+    console.log(`🖱 双击: ${operation.selector}`);
   }
 
   // ==================== 辅助等待方法 ====================

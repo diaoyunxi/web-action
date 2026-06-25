@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "网页操作执行器",
-  "version": "1.5.0",
-  "description": "在网页中按顺序执行输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏操作，支持重复执行、条件循环、变量、元素拾取和配置导入导出",
+  "version": "1.6.0",
+  "description": "在网页中按顺序执行输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、HTTP请求、标签页、通知、Cookie、悬停、双击操作，支持重复执行、条件循环、变量、元素拾取和配置导入导出",
   "author": "Web Action Executor",
   "homepage_url": "https://github.com/diaoyunxi/web-action-executor",
   "icons": {

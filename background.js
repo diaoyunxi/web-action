@@ -69,6 +69,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+
+  if (request.action === 'closeCurrentTab') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.remove(tabs[0].id);
+      }
+    });
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
 // 快捷键命令监听
