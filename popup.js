@@ -1,6 +1,6 @@
 /**
- * 网页操作执行器 - 弹出窗口脚本 v1.4.0
- * 新增: 元素拾取器、脚本执行、元素提取、等待操作、下拉选择操作、变量替换、配置导入导出、执行日志、快捷键支持
+ * 网页操作执行器 - 弹出窗口脚本 v1.5.0
+ * 新增: 键盘操作、截屏操作、剪贴板操作
  */
 
 class OperationManager {
@@ -130,6 +130,9 @@ class OperationManager {
     document.getElementById('addSelect').addEventListener('click', () => this.addOperation('select'));
     document.getElementById('addScript').addEventListener('click', () => this.addOperation('script'));
     document.getElementById('addExtract').addEventListener('click', () => this.addOperation('extract'));
+    document.getElementById('addKeyboard').addEventListener('click', () => this.addOperation('keyboard'));
+    document.getElementById('addScreenshot').addEventListener('click', () => this.addOperation('screenshot'));
+    document.getElementById('addClipboard').addEventListener('click', () => this.addOperation('clipboard'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -374,7 +377,10 @@ class OperationManager {
       wait: { ...baseOperation, type: 'wait', waitType: 'fixed', waitDuration: 2000, waitSelector: '', waitTimeout: 10000, description: '等待' },
       select: { ...baseOperation, type: 'select', selector: '', selectType: 'value', selectValue: '', description: '下拉选择' },
       script: { ...baseOperation, type: 'script', scriptCode: '', description: '执行脚本' },
-      extract: { ...baseOperation, type: 'extract', selector: '', extractType: 'text', extractAttribute: '', description: '提取元素' }
+      extract: { ...baseOperation, type: 'extract', selector: '', extractType: 'text', extractAttribute: '', description: '提取元素' },
+      keyboard: { ...baseOperation, type: 'keyboard', keyType: 'key', keyValue: 'Enter', modifierKeys: [], description: '键盘按键' },
+      screenshot: { ...baseOperation, type: 'screenshot', screenshotType: 'page', selector: '', description: '页面截屏' },
+      clipboard: { ...baseOperation, type: 'clipboard', clipboardAction: 'write', clipboardValue: '', clipboardVariable: '', description: '剪贴板操作' }
     };
 
     if (typeMap[type]) {
@@ -1001,6 +1007,84 @@ class OperationManager {
             </div>
           </div>` : ''}`;
         break;
+
+      case 'keyboard':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>按键类型</label>
+              <select class="field-keyType" data-id="${op.id}">
+                <option value="key" ${op.keyType === 'key' ? 'selected' : ''}>普通按键</option>
+                <option value="modifier" ${op.keyType === 'modifier' ? 'selected' : ''}>组合键</option>
+                <option value="sequence" ${op.keyType === 'sequence' ? 'selected' : ''}>按键序列</option>
+              </select>
+            </div>
+            <div class="field-group flex-2">
+              <label>按键值</label>
+              <input type="text" class="field-keyValue" data-id="${op.id}" value="${this.escapeHtml(op.keyValue || 'Enter')}" placeholder="Enter, Tab, Escape...">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>修饰键</label>
+              <div class="modifier-checkboxes">
+                <label class="checkbox-label"><input type="checkbox" class="field-modCtrl" data-id="${op.id}" ${(op.modifierKeys || []).includes('ctrl') ? 'checked' : ''}> Ctrl</label>
+                <label class="checkbox-label"><input type="checkbox" class="field-modShift" data-id="${op.id}" ${(op.modifierKeys || []).includes('shift') ? 'checked' : ''}> Shift</label>
+                <label class="checkbox-label"><input type="checkbox" class="field-modAlt" data-id="${op.id}" ${(op.modifierKeys || []).includes('alt') ? 'checked' : ''}> Alt</label>
+              </div>
+            </div>
+          </div>
+          <div class="keyboard-hint">💡 常用键: Enter, Tab, Escape, Backspace, ArrowUp, F1-F12</div>`;
+        break;
+
+      case 'screenshot':
+        fields = `
+          <div class="field-group">
+            <label>截屏类型</label>
+            <select class="field-screenshotType" data-id="${op.id}">
+              <option value="page" ${op.screenshotType === 'page' ? 'selected' : ''}>整页截图</option>
+              <option value="viewport" ${op.screenshotType === 'viewport' ? 'selected' : ''}>可视区域</option>
+              <option value="element" ${op.screenshotType === 'element' ? 'selected' : ''}>元素截图</option>
+            </select>
+          </div>
+          ${op.screenshotType === 'element' ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`screenshotSelector-${op.id}`)}</label>
+              <input type="text" class="field-screenshotSelector" data-id="${op.id}" data-picker-target="screenshotSelector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target">
+            </div>
+          </div>` : ''}`;
+        break;
+
+      case 'clipboard':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-clipboardAction" data-id="${op.id}">
+                <option value="write" ${op.clipboardAction === 'write' ? 'selected' : ''}>写入剪贴板</option>
+                <option value="read" ${op.clipboardAction === 'read' ? 'selected' : ''}>读取剪贴板</option>
+              </select>
+            </div>
+          </div>
+          ${op.clipboardAction === 'write' ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>写入内容</label>
+              <input type="text" class="field-clipboardValue" data-id="${op.id}" value="${this.escapeHtml(op.clipboardValue || '')}" placeholder="文本内容">
+            </div>
+            <div class="field-group flex-1">
+              <label>存储变量</label>
+              <input type="text" class="field-clipboardVariable" data-id="${op.id}" value="${this.escapeHtml(op.clipboardVariable || '')}" placeholder="myData">
+            </div>
+          </div>` : `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>存储变量</label>
+              <input type="text" class="field-clipboardVariable" data-id="${op.id}" value="${this.escapeHtml(op.clipboardVariable || '')}" placeholder="clipboardContent">
+            </div>
+          </div>`}`;
+        break;
     }
 
     fields += `
@@ -1032,7 +1116,11 @@ class OperationManager {
       'field-waitSelectorOp': 'waitSelector',
       'field-selectValue': 'selectValue',
       'field-scriptCode': 'scriptCode',
-      'field-extractAttribute': 'extractAttribute'
+      'field-extractAttribute': 'extractAttribute',
+      'field-keyValue': 'keyValue',
+      'field-screenshotSelector': 'selector',
+      'field-clipboardValue': 'clipboardValue',
+      'field-clipboardVariable': 'clipboardVariable'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -1083,6 +1171,46 @@ class OperationManager {
         this.renderOperations();
       });
     });
+
+    document.querySelectorAll('.field-keyType').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'keyType', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-screenshotType').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'screenshotType', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-clipboardAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'clipboardAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    ['field-modCtrl', 'field-modShift', 'field-modAlt'].forEach(cls => {
+      document.querySelectorAll(`.${cls}`).forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const id = parseInt(e.target.dataset.id);
+          const operation = this.operations.find(op => op.id === id);
+          if (operation) {
+            const modKey = cls === 'field-modCtrl' ? 'ctrl' : cls === 'field-modShift' ? 'shift' : 'alt';
+            if (!operation.modifierKeys) operation.modifierKeys = [];
+            if (e.target.checked) {
+              if (!operation.modifierKeys.includes(modKey)) operation.modifierKeys.push(modKey);
+            } else {
+              operation.modifierKeys = operation.modifierKeys.filter(k => k !== modKey);
+            }
+            this.saveOperations();
+          }
+        });
+      });
+    });
   }
 
   initDragDrop() {
@@ -1110,7 +1238,7 @@ class OperationManager {
   }
 
   getIcon(type) {
-    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍' };
+    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎' };
     return icons[type] || '❓';
   }
 

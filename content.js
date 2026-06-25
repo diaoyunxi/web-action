@@ -1,7 +1,7 @@
 /**
- * 网页操作执行器 - 内容脚本 v1.4.0
+ * 网页操作执行器 - 内容脚本 v1.5.0
  * 在目标页面中执行实际操作
- * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取 及 变量替换、元素拾取
+ * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、剪贴板
  */
 
 class OperationExecutor {
@@ -314,6 +314,9 @@ class OperationExecutor {
       case 'select':  await this.executeSelect(operation); break;
       case 'script':  await this.executeScript(operation); break;
       case 'extract': await this.executeExtract(operation); break;
+      case 'keyboard': await this.executeKeyboard(operation); break;
+      case 'screenshot': await this.executeScreenshot(operation); break;
+      case 'clipboard': await this.executeClipboard(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -732,6 +735,90 @@ class OperationExecutor {
       selector: operation.selector,
       operationId: operation.id
     });
+  }
+
+  // ==================== 键盘操作 ====================
+
+  async executeKeyboard(operation) {
+    const keyType = operation.keyType || 'key';
+    const keyValue = this.substituteVariables(operation.keyValue || 'Enter');
+    const modifierKeys = operation.modifierKeys || [];
+
+    if (keyType === 'sequence') {
+      const keys = keyValue.split(/\s+/).filter(k => k);
+      for (const key of keys) {
+        if (this.shouldStop) throw new Error('用户停止执行');
+        await this.pressKey(key, modifierKeys);
+        await this.sleep(50);
+      }
+    } else {
+      await this.pressKey(keyValue, modifierKeys);
+    }
+  }
+
+  async pressKey(keyValue, modifierKeys = []) {
+    const key = this.normalizeKey(keyValue);
+    const modifiers = [];
+    if (modifierKeys.includes('ctrl')) modifiers.push('ctrlKey');
+    if (modifierKeys.includes('shift')) modifiers.push('shiftKey');
+    if (modifierKeys.includes('alt')) modifiers.push('altKey');
+
+    const options = { key, code: this.getEventCode(key), bubbles: true, cancelable: true };
+    if (modifiers.length > 0) options.modifiers = modifiers;
+
+    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', options));
+    document.activeElement.dispatchEvent(new KeyboardEvent('keyup', { ...options }));
+    console.log(`⌨️ 按键: ${key}`);
+  }
+
+  normalizeKey(key) {
+    const map = { 'enter':'Enter','tab':'Tab','escape':'Escape','esc':'Escape','backspace':'Backspace','delete':'Delete','arrowup':'ArrowUp','arrowdown':'ArrowDown','arrowleft':'ArrowLeft','arrowright':'ArrowRight','home':'Home','end':'End','pageup':'PageUp','pagedown':'PageDown',' ':'Space' };
+    return map[key.toLowerCase()] || key;
+  }
+
+  getEventCode(key) {
+    const map = { 'Enter':'Enter','Tab':'Tab','Escape':'Escape','Backspace':'Backspace','Delete':'Delete','ArrowUp':'ArrowUp','ArrowDown':'ArrowDown','ArrowLeft':'ArrowLeft','ArrowRight':'ArrowRight','Home':'Home','End':'End','PageUp':'PageUp','PageDown':'PageDown',' ':'Space' };
+    if (map[key]) return map[key];
+    if (key.length === 1) return `Key${key.toUpperCase()}`;
+    return key;
+  }
+
+  // ==================== 截屏操作 ====================
+
+  async executeScreenshot(operation) {
+    const screenshotType = operation.screenshotType || 'page';
+
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ action: 'captureScreenshot' }, (response) => {
+        if (response && response.success) {
+          chrome.runtime.sendMessage({ action: 'screenshotResult', dataUrl: response.dataUrl, type: screenshotType });
+          console.log(`📷 截屏完成 (${screenshotType})`);
+          resolve();
+        } else {
+          reject(new Error(response?.error || '截屏失败'));
+        }
+      });
+    });
+  }
+
+  // ==================== 剪贴板操作 ====================
+
+  async executeClipboard(operation) {
+    const action = operation.clipboardAction || 'write';
+
+    if (action === 'write') {
+      const value = this.substituteVariables(operation.clipboardValue || '');
+      await navigator.clipboard.writeText(value);
+      if (operation.clipboardVariable) {
+        chrome.runtime.sendMessage({ action: 'storeData', key: operation.clipboardVariable, value });
+      }
+      console.log(`📋 已写入剪贴板: ${value.substring(0, 30)}...`);
+    } else {
+      const text = await navigator.clipboard.readText();
+      const varName = operation.clipboardVariable || 'clipboardContent';
+      chrome.runtime.sendMessage({ action: 'storeData', key: varName, value: text });
+      console.log(`📋 已读取剪贴板: ${text.substring(0, 30)}...`);
+    }
   }
 
   // ==================== 辅助等待方法 ====================

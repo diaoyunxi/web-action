@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](https://github.com/your-repo/web-action-executor)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/diaoyunxi/web-action-executor)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
@@ -37,6 +37,13 @@
 | **点击** | 👆 | 点击指定元素 | 按钮、链接 |
 | **滑动** | ↕️ | 滚动页面到指定位置 | 查看页面内容 |
 | **刷新** | 🔄 | 刷新当前页面 | 重新加载、等待元素 |
+| **等待** | ⏳ | 等待固定时长或元素状态 | 等待加载完成 |
+| **选择** | 📋 | 操作下拉列表 | 按值/索引/文本选择 |
+| **脚本** | ⚡ | 执行自定义 JavaScript | 复杂自动化逻辑 |
+| **提取** | 🔍 | 提取元素文本/属性值 | 数据采集 |
+| **键盘** | ⌨️ | 模拟键盘按键/组合键 | Tab、Enter、Ctrl+A |
+| **截屏** | 📷 | 捕获页面或元素截图 | 截图存档 |
+| **剪贴板** | 📎 | 读写剪贴板内容 | 复制粘贴数据 |
 
 ### 🔄 重复执行模式
 
@@ -157,7 +164,7 @@ git clone https://github.com/your-repo/web-action-executor.git
 
 ```
 ┌──────────────────────────────────────────┐
-│  🎯 网页操作执行器              v1.2.1  │
+│  🎯 网页操作执行器              v1.5.0  │
 ├──────────────────────────────────────────┤
 │  ┌────────────────────────────────────┐  │
 │  │ #1 📝 输入用户名                   │  │
@@ -597,6 +604,13 @@ chrome.storage.local.get(null, console.log)
 ---
 
 ## 📝 更新日志
+
+### v1.5.0 (2026-06-24)
+
+**新增**
+- ✨ 键盘操作 - 模拟键盘按键、组合键、按键序列
+- ✨ 截屏操作 - 整页截图、可视区域截图
+- ✨ 剪贴板操作 - 读写剪贴板内容
 
 ### v1.2.1 (2024-01-15)
 

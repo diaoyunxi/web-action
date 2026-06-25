@@ -1,4 +1,4 @@
-/* ==================== 基础样式 v1.4.0 ==================== */
+/* ==================== 基础样式 v1.5.0 ==================== */
 
 * {
   margin: 0;
@@ -124,6 +124,9 @@ body {
 .type-select  { background: #EFEBE9; color: #5D4037; }
 .type-script  { background: #ECEFF1; color: #37474F; }
 .type-extract { background: #FCE4EC; color: #C2185B; }
+.type-keyboard { background: #E8EAF6; color: #3949AB; }
+.type-screenshot { background: #E0F2F1; color: #00897B; }
+.type-clipboard { background: #FFF3E0; color: #EF6C00; }
 
 .operation-controls {
   display: flex;
@@ -316,7 +319,7 @@ body {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin-bottom: 10px;
 }
@@ -354,6 +357,9 @@ body {
 .btn-select  { background: #5D4037; color: white; }
 .btn-script  { background: #37474F; color: white; }
 .btn-extract { background: #C2185B; color: white; }
+.btn-keyboard { background: #3949AB; color: white; }
+.btn-screenshot { background: #00897B; color: white; }
+.btn-clipboard { background: #EF6C00; color: white; }
 
 .btn-execute { background: #E65100; color: white; flex: 2; font-weight: 600; font-size: 14px; }
 .btn-stop    { background: #C62828; color: white; flex: 2; font-weight: 600; font-size: 14px; animation: pulse 1.5s infinite; }
@@ -688,4 +694,36 @@ body {
   border-color: #37474F;
   background: white;
   box-shadow: 0 0 0 2px rgba(55,71,79,0.1);
+}
+
+/* ==================== 键盘操作样式 ==================== */
+
+.keyboard-hint {
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 5px;
+  margin-top: 4px;
+  border-left: 3px solid #3949AB;
+}
+
+.modifier-checkboxes {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.modifier-checkboxes .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.modifier-checkboxes input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #3949AB;
 }

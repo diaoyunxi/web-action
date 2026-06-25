@@ -1,6 +1,6 @@
 /**
- * 网页操作执行器 - 后台服务 v1.4.0
- * 支持: 扩展生命周期、消息转发、快捷键命令、元素拾取
+ * 网页操作执行器 - 后台服务 v1.5.0
+ * 支持: 扩展生命周期、消息转发、快捷键命令、截屏、数据存储
  */
 
 // 安装/更新时初始化
@@ -46,6 +46,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.tabs.create({ url: request.url }, (tab) => {
       sendResponse({ tab });
     });
+    return true;
+  }
+
+  if (request.action === 'captureScreenshot') {
+    chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ success: true, dataUrl: dataUrl });
+      }
+    });
+    return true;
+  }
+
+  if (request.action === 'storeData') {
+    chrome.storage.local.get(['storedData'], (result) => {
+      const storedData = result.storedData || {};
+      storedData[request.key] = request.value;
+      chrome.storage.local.set({ storedData });
+    });
+    sendResponse({ success: true });
     return true;
   }
 });
