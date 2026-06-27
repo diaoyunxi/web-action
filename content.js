@@ -1,8 +1,18 @@
 /**
- * 网页操作执行器 - 内容脚本 v1.5.0
+ * 网页操作执行器 - 内容脚本 v1.7.0
  * 在目标页面中执行实际操作
- * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、剪贴板
+ * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、剪贴板、
+ *       HTTP请求、标签页、通知、Cookie、悬停、双击、条件判断、文件上传、
+ *       变量设置、元素属性、本地存储、页面导航
  */
+
+// 用于条件判断操作：抛出该错误将跳过当前循环迭代的剩余操作
+class SkipIterationError extends Error {
+  constructor(message = '条件不满足，跳过当前迭代') {
+    super(message);
+    this.name = 'SkipIterationError';
+  }
+}
 
 class OperationExecutor {
   constructor() {
@@ -11,8 +21,22 @@ class OperationExecutor {
     this.loopIndex = 0;
     this.pickerMode = false;
     this.pickerCallback = null;
+    this.variables = {}; // 自定义变量存储（由 setVariable 操作维护）
     this.initMessageListener();
     this.checkRefreshWait();
+    this.loadStoredVariables();
+  }
+
+  // 加载后台存储的自定义变量
+  async loadStoredVariables() {
+    try {
+      const result = await chrome.storage.local.get(['storedData']);
+      if (result.storedData && typeof result.storedData === 'object') {
+        this.variables = { ...result.storedData };
+      }
+    } catch (error) {
+      console.warn('加载存储变量失败:', error);
+    }
   }
 
   // ==================== 消息监听 ====================
@@ -290,6 +314,11 @@ class OperationExecutor {
         await this.executeOperation(op);
         console.log(`✅ 操作 ${i + 1} 完成`);
       } catch (error) {
+        // 条件判断操作抛出跳过信号：结束当前迭代但不算失败
+        if (error instanceof SkipIterationError) {
+          console.log(`⏭ 跳过当前迭代: ${error.message}`);
+          return { skipped: true, reason: error.message };
+        }
         console.error(`❌ 操作 ${i + 1} 失败:`, error);
         throw new Error(`步骤 ${i + 1} [${op.description || op.type}] 失败: ${error.message}`);
       }
@@ -323,6 +352,12 @@ class OperationExecutor {
       case 'cookie': await this.executeCookie(operation); break;
       case 'hover': await this.executeHover(operation); break;
       case 'doubleClick': await this.executeDoubleClick(operation); break;
+      case 'if': await this.executeIf(operation); break;
+      case 'fileUpload': await this.executeFileUpload(operation); break;
+      case 'setVariable': await this.executeSetVariable(operation); break;
+      case 'setAttribute': await this.executeSetAttribute(operation); break;
+      case 'storage': await this.executeStorage(operation); break;
+      case 'navigate': await this.executeNavigate(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -374,6 +409,12 @@ class OperationExecutor {
 
     // {{loopIndex0}} - 从0开始的循环索引
     input = input.replace(/\{\{loopIndex0\}\}/g, String(Math.max(0, (this.loopIndex || 1) - 1)));
+
+    // {{var:name}} - 自定义变量 (由 setVariable 操作设置)
+    input = input.replace(/\{\{var:([a-zA-Z_][\w]*)\}\}/g, (match, name) => {
+      const val = this.variables ? this.variables[name] : undefined;
+      return val === undefined || val === null ? match : String(val);
+    });
 
     return input;
   }
@@ -1063,6 +1104,303 @@ class OperationExecutor {
 
     this.highlightElement(element, '#E91E63');
     console.log(`🖱 双击: ${operation.selector}`);
+  }
+
+  // ==================== 条件判断操作 ====================
+
+  async executeIf(operation) {
+    const conditionType = operation.ifConditionType || 'elementExists';
+    const selector = this.substituteVariables(operation.ifSelector || '');
+    const ifMode = operation.ifMode || 'skip';
+
+    let conditionMet = false;
+
+    switch (conditionType) {
+      case 'elementExists': {
+        conditionMet = !!this.findElement(selector);
+        break;
+      }
+      case 'elementNotExists': {
+        conditionMet = !this.findElement(selector);
+        break;
+      }
+      case 'elementVisible': {
+        const el = this.findElement(selector);
+        conditionMet = !!el && this.isElementVisible(el);
+        break;
+      }
+      case 'elementNotVisible': {
+        const el = this.findElement(selector);
+        conditionMet = !el || !this.isElementVisible(el);
+        break;
+      }
+      case 'variableEquals': {
+        const varName = operation.ifVariableName || '';
+        const expected = this.substituteVariables(operation.ifVariableValue || '');
+        const actual = this.variables ? String(this.variables[varName] ?? '') : '';
+        conditionMet = actual === expected;
+        break;
+      }
+      case 'variableNotEmpty': {
+        const varName = operation.ifVariableName || '';
+        const val = this.variables ? this.variables[varName] : undefined;
+        conditionMet = val !== undefined && val !== null && String(val).trim() !== '';
+        break;
+      }
+      default:
+        throw new Error(`未知条件类型: ${conditionType}`);
+    }
+
+    console.log(`🔀 条件判断 [${conditionType}]: ${conditionMet ? '满足' : '不满足'}`);
+
+    // skip 模式: 条件不满足时跳过当前迭代剩余操作
+    // pass 模式: 条件满足时跳过当前迭代剩余操作 (反向)
+    if (ifMode === 'skip' && !conditionMet) {
+      throw new SkipIterationError(`条件 [${conditionType}] 不满足，跳过当前迭代`);
+    }
+    if (ifMode === 'pass' && conditionMet) {
+      throw new SkipIterationError(`条件 [${conditionType}] 已满足，跳过当前迭代`);
+    }
+  }
+
+  // ==================== 文件上传操作 ====================
+
+  async executeFileUpload(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到文件输入元素: ${operation.selector}`);
+    }
+
+    if (element.tagName !== 'INPUT' || element.type !== 'file') {
+      throw new Error(`目标元素不是文件输入框: <${element.tagName.toLowerCase()} type="${element.type || ''}">`);
+    }
+
+    const fileUrl = this.substituteVariables(operation.fileUrl || '');
+    const fileName = this.substituteVariables(operation.fileName || 'uploaded-file');
+
+    if (!fileUrl) {
+      throw new Error('文件URL为空');
+    }
+
+    try {
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error(`获取文件失败 HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      element.files = dataTransfer.files;
+
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+
+      this.highlightElement(element, '#00ACC1');
+      console.log(`📁 文件上传完成: ${fileName} (${blob.size} bytes)`);
+    } catch (error) {
+      throw new Error(`文件上传失败: ${error.message}`);
+    }
+  }
+
+  // ==================== 变量设置操作 ====================
+
+  async executeSetVariable(operation) {
+    const varName = operation.varName || '';
+    if (!varName) {
+      throw new Error('变量名为空');
+    }
+
+    const action = operation.varAction || 'set';
+    const rawValue = operation.varValue || '';
+
+    switch (action) {
+      case 'set': {
+        const value = this.substituteVariables(rawValue);
+        this.variables[varName] = value;
+        console.log(`📦 设置变量: ${varName} = ${String(value).substring(0, 50)}`);
+        break;
+      }
+      case 'clear': {
+        delete this.variables[varName];
+        console.log(`📦 清除变量: ${varName}`);
+        break;
+      }
+      case 'increment': {
+        const current = parseFloat(this.variables[varName]) || 0;
+        const step = parseFloat(this.substituteVariables(rawValue || '1')) || 1;
+        this.variables[varName] = String(current + step);
+        console.log(`📦 自增变量: ${varName} = ${this.variables[varName]}`);
+        break;
+      }
+      case 'append': {
+        const current = this.variables[varName] !== undefined ? String(this.variables[varName]) : '';
+        const value = this.substituteVariables(rawValue);
+        this.variables[varName] = current + value;
+        console.log(`📦 追加变量: ${varName} = ${String(this.variables[varName]).substring(0, 50)}`);
+        break;
+      }
+      default:
+        throw new Error(`未知变量操作: ${action}`);
+    }
+
+    // 持久化到 chrome.storage，供 popup 或下次执行使用
+    chrome.runtime.sendMessage({
+      action: 'storeData',
+      key: varName,
+      value: this.variables[varName]
+    });
+  }
+
+  // ==================== 元素属性操作 ====================
+
+  async executeSetAttribute(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(200);
+
+    const attrAction = operation.attrAction || 'set';
+    const attrName = this.substituteVariables(operation.attrName || '');
+    if (!attrName) {
+      throw new Error('属性名为空');
+    }
+
+    switch (attrAction) {
+      case 'set': {
+        const attrValue = this.substituteVariables(operation.attrValue || '');
+        element.setAttribute(attrName, attrValue);
+        console.log(`🏷 设置属性: ${attrName}="${attrValue}"`);
+        break;
+      }
+      case 'remove': {
+        element.removeAttribute(attrName);
+        console.log(`🏷 移除属性: ${attrName}`);
+        break;
+      }
+      case 'toggle': {
+        if (element.hasAttribute(attrName)) {
+          element.removeAttribute(attrName);
+          console.log(`🏷 切换属性(移除): ${attrName}`);
+        } else {
+          const attrValue = this.substituteVariables(operation.attrValue || '');
+          element.setAttribute(attrName, attrValue);
+          console.log(`🏷 切换属性(设置): ${attrName}="${attrValue}"`);
+        }
+        break;
+      }
+      default:
+        throw new Error(`未知属性操作: ${attrAction}`);
+    }
+
+    // 触发 change 事件以通知框架
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    this.highlightElement(element, '#5C6BC0');
+  }
+
+  // ==================== 本地存储操作 ====================
+
+  async executeStorage(operation) {
+    const storageType = operation.storageType || 'localStorage';
+    const storageAction = operation.storageAction || 'get';
+    const key = this.substituteVariables(operation.storageKey || '');
+
+    let storageObj;
+    try {
+      if (storageType === 'localStorage') {
+        storageObj = window.localStorage;
+      } else if (storageType === 'sessionStorage') {
+        storageObj = window.sessionStorage;
+      } else {
+        throw new Error(`未知存储类型: ${storageType}`);
+      }
+    } catch (error) {
+      throw new Error(`无法访问 ${storageType}: ${error.message}`);
+    }
+
+    switch (storageAction) {
+      case 'get': {
+        if (!key) throw new Error('存储键名为空');
+        const value = storageObj.getItem(key) || '';
+        console.log(`🗄 读取 ${storageType}[${key}]: ${value.substring(0, 50)}`);
+        if (operation.storageVariable) {
+          this.variables[operation.storageVariable] = value;
+          chrome.runtime.sendMessage({
+            action: 'storeData',
+            key: operation.storageVariable,
+            value
+          });
+        }
+        break;
+      }
+      case 'set': {
+        if (!key) throw new Error('存储键名为空');
+        const value = this.substituteVariables(operation.storageValue || '');
+        storageObj.setItem(key, value);
+        console.log(`🗄 写入 ${storageType}[${key}]: ${value.substring(0, 50)}`);
+        break;
+      }
+      case 'remove': {
+        if (!key) throw new Error('存储键名为空');
+        storageObj.removeItem(key);
+        console.log(`🗄 删除 ${storageType}[${key}]`);
+        break;
+      }
+      case 'clear': {
+        storageObj.clear();
+        console.log(`🗄 清空 ${storageType}`);
+        break;
+      }
+      default:
+        throw new Error(`未知存储操作: ${storageAction}`);
+    }
+  }
+
+  // ==================== 页面导航操作 ====================
+
+  async executeNavigate(operation) {
+    const navigateAction = operation.navigateAction || 'url';
+    const url = this.substituteVariables(operation.navigateUrl || '');
+    const waitLoad = operation.navigateWaitLoad !== false;
+
+    switch (navigateAction) {
+      case 'url': {
+        if (!url) throw new Error('导航URL为空');
+        // 相对路径处理
+        let target = url;
+        if (!/^https?:\/\//i.test(target) && !target.startsWith('//')) {
+          target = new URL(target, window.location.href).href;
+        }
+        console.log(`🧭 导航到: ${target}`);
+        if (waitLoad) {
+          window.location.href = target;
+        } else {
+          window.location.replace(target);
+        }
+        break;
+      }
+      case 'back': {
+        history.back();
+        console.log('🧭 后退');
+        break;
+      }
+      case 'forward': {
+        history.forward();
+        console.log('🧭 前进');
+        break;
+      }
+      case 'reload': {
+        window.location.reload();
+        console.log('🧭 重新加载');
+        break;
+      }
+      default:
+        throw new Error(`未知导航操作: ${navigateAction}`);
+    }
   }
 
   // ==================== 辅助等待方法 ====================

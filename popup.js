@@ -1,6 +1,6 @@
 /**
- * 网页操作执行器 - 弹出窗口脚本 v1.5.0
- * 新增: 键盘操作、截屏操作、剪贴板操作
+ * 网页操作执行器 - 弹出窗口脚本 v1.7.0
+ * 新增: 条件判断、文件上传、变量设置、元素属性、本地存储、页面导航
  */
 
 class OperationManager {
@@ -139,6 +139,12 @@ class OperationManager {
     document.getElementById('addCookie').addEventListener('click', () => this.addOperation('cookie'));
     document.getElementById('addHover').addEventListener('click', () => this.addOperation('hover'));
     document.getElementById('addDoubleClick').addEventListener('click', () => this.addOperation('doubleClick'));
+    document.getElementById('addIf').addEventListener('click', () => this.addOperation('if'));
+    document.getElementById('addFileUpload').addEventListener('click', () => this.addOperation('fileUpload'));
+    document.getElementById('addSetVariable').addEventListener('click', () => this.addOperation('setVariable'));
+    document.getElementById('addSetAttribute').addEventListener('click', () => this.addOperation('setAttribute'));
+    document.getElementById('addStorage').addEventListener('click', () => this.addOperation('storage'));
+    document.getElementById('addNavigate').addEventListener('click', () => this.addOperation('navigate'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -400,7 +406,13 @@ class OperationManager {
       notification: { ...baseOperation, type: 'notification', notifTitle: '网页操作执行器', notifBody: '', notifDuration: 3000, description: '通知' },
       cookie: { ...baseOperation, type: 'cookie', cookieAction: 'get', cookieName: '', cookieValue: '', cookieDomain: '', cookiePath: '/', cookieMaxAge: '', cookieVariable: '', description: 'Cookie操作' },
       hover: { ...baseOperation, type: 'hover', selector: '', hoverDuration: 1000, description: '悬停' },
-      doubleClick: { ...baseOperation, type: 'doubleClick', selector: '', description: '双击' }
+      doubleClick: { ...baseOperation, type: 'doubleClick', selector: '', description: '双击' },
+      if: { ...baseOperation, type: 'if', ifMode: 'skip', ifConditionType: 'elementExists', ifSelector: '', ifVariableName: '', ifVariableValue: '', description: '条件判断' },
+      fileUpload: { ...baseOperation, type: 'fileUpload', selector: '', fileUrl: '', fileName: 'uploaded-file', description: '文件上传' },
+      setVariable: { ...baseOperation, type: 'setVariable', varName: '', varAction: 'set', varValue: '', description: '变量设置' },
+      setAttribute: { ...baseOperation, type: 'setAttribute', selector: '', attrAction: 'set', attrName: '', attrValue: '', description: '元素属性' },
+      storage: { ...baseOperation, type: 'storage', storageType: 'localStorage', storageAction: 'get', storageKey: '', storageValue: '', storageVariable: '', description: '本地存储' },
+      navigate: { ...baseOperation, type: 'navigate', navigateAction: 'url', navigateUrl: '', navigateWaitLoad: true, description: '页面导航' }
     };
 
     if (typeMap[type]) {
@@ -456,7 +468,7 @@ class OperationManager {
 
   exportConfig() {
     const config = {
-      version: '1.3.0',
+      version: '1.7.0',
       exportTime: new Date().toISOString(),
       operations: this.operations,
       repeatSettings: {
@@ -1251,6 +1263,196 @@ class OperationManager {
           </div>
           <div class="dblclick-hint">💡 双击操作会触发完整的鼠标事件序列和 dblclick 事件</div>`;
         break;
+
+      case 'if':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>判断模式</label>
+              <select class="field-ifMode" data-id="${op.id}">
+                <option value="skip" ${op.ifMode === 'skip' ? 'selected' : ''}>条件不满足时跳过当前迭代</option>
+                <option value="pass" ${op.ifMode === 'pass' ? 'selected' : ''}>条件满足时跳过当前迭代</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>条件类型</label>
+              <select class="field-ifConditionType" data-id="${op.id}">
+                <option value="elementExists" ${op.ifConditionType === 'elementExists' ? 'selected' : ''}>元素存在</option>
+                <option value="elementNotExists" ${op.ifConditionType === 'elementNotExists' ? 'selected' : ''}>元素不存在</option>
+                <option value="elementVisible" ${op.ifConditionType === 'elementVisible' ? 'selected' : ''}>元素可见</option>
+                <option value="elementNotVisible" ${op.ifConditionType === 'elementNotVisible' ? 'selected' : ''}>元素不可见</option>
+                <option value="variableEquals" ${op.ifConditionType === 'variableEquals' ? 'selected' : ''}>变量等于</option>
+                <option value="variableNotEmpty" ${op.ifConditionType === 'variableNotEmpty' ? 'selected' : ''}>变量非空</option>
+              </select>
+            </div>
+          </div>
+          ${(op.ifConditionType || 'elementExists').startsWith('element') ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`ifSelector-${op.id}`)}</label>
+              <input type="text" class="field-ifSelector" data-id="${op.id}" data-picker-target="ifSelector-${op.id}" value="${this.escapeHtml(op.ifSelector || '')}" placeholder="#target, .item">
+            </div>
+          </div>` : `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>变量名</label>
+              <input type="text" class="field-ifVariableName" data-id="${op.id}" value="${this.escapeHtml(op.ifVariableName || '')}" placeholder="myVar">
+            </div>
+            ${op.ifConditionType === 'variableEquals' ? `
+            <div class="field-group flex-2">
+              <label>期望值 (支持变量)</label>
+              <input type="text" class="field-ifVariableValue" data-id="${op.id}" value="${this.escapeHtml(op.ifVariableValue || '')}" placeholder="期望的值">
+            </div>` : ''}
+          </div>`}
+          <div class="if-hint">💡 条件判断会跳过当前循环迭代中剩余的操作；用变量 {{var:name}} 引用先前设置的变量</div>`;
+        break;
+
+      case 'fileUpload':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>文件输入框选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="input[type=file]">
+            </div>
+            <div class="field-group flex-1">
+              <label>保存文件名 (支持变量)</label>
+              <input type="text" class="field-fileName" data-id="${op.id}" value="${this.escapeHtml(op.fileName || 'uploaded-file')}" placeholder="file.png">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>文件URL (支持变量，将自动下载并上传)</label>
+            <input type="text" class="field-fileUrl" data-id="${op.id}" value="${this.escapeHtml(op.fileUrl || '')}" placeholder="https://example.com/file.pdf">
+          </div>
+          <div class="fileupload-hint">💡 通过 URL 拉取文件并填充到 input[type=file]，目标元素必须是文件输入框</div>`;
+        break;
+
+      case 'setVariable':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>变量操作</label>
+              <select class="field-varAction" data-id="${op.id}">
+                <option value="set" ${op.varAction === 'set' ? 'selected' : ''}>设置 (覆盖)</option>
+                <option value="append" ${op.varAction === 'append' ? 'selected' : ''}>追加 (字符串拼接)</option>
+                <option value="increment" ${op.varAction === 'increment' ? 'selected' : ''}>自增 (数字)</option>
+                <option value="clear" ${op.varAction === 'clear' ? 'selected' : ''}>清除</option>
+              </select>
+            </div>
+            <div class="field-group flex-1">
+              <label>变量名</label>
+              <input type="text" class="field-varName" data-id="${op.id}" value="${this.escapeHtml(op.varName || '')}" placeholder="myVar">
+            </div>
+          </div>
+          ${op.varAction !== 'clear' ? `
+          <div class="field-group">
+            <label>变量值 (支持变量)</label>
+            <input type="text" class="field-varValue" data-id="${op.id}" value="${this.escapeHtml(op.varValue || '')}" placeholder="值或 {{var:otherVar}}">
+          </div>` : ''}
+          <div class="var-hint">💡 设置的变量可通过 {{var:变量名}} 在后续操作中引用</div>`;
+        break;
+
+      case 'setAttribute':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target">
+            </div>
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-attrAction" data-id="${op.id}">
+                <option value="set" ${op.attrAction === 'set' ? 'selected' : ''}>设置属性</option>
+                <option value="remove" ${op.attrAction === 'remove' ? 'selected' : ''}>移除属性</option>
+                <option value="toggle" ${op.attrAction === 'toggle' ? 'selected' : ''}>切换属性</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>属性名 (支持变量)</label>
+              <input type="text" class="field-attrName" data-id="${op.id}" value="${this.escapeHtml(op.attrName || '')}" placeholder="disabled, checked, data-id">
+            </div>
+            ${op.attrAction !== 'remove' ? `
+            <div class="field-group flex-2">
+              <label>属性值 (支持变量)</label>
+              <input type="text" class="field-attrValue" data-id="${op.id}" value="${this.escapeHtml(op.attrValue || '')}" placeholder="属性值">
+            </div>` : ''}
+          </div>
+          <div class="attr-hint">💡 设置后自动触发 change 事件；常用于禁用/启用按钮、勾选复选框、修改 data-* 属性</div>`;
+        break;
+
+      case 'storage':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>存储类型</label>
+              <select class="field-storageType" data-id="${op.id}">
+                <option value="localStorage" ${op.storageType === 'localStorage' ? 'selected' : ''}>localStorage</option>
+                <option value="sessionStorage" ${op.storageType === 'sessionStorage' ? 'selected' : ''}>sessionStorage</option>
+              </select>
+            </div>
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-storageAction" data-id="${op.id}">
+                <option value="get" ${op.storageAction === 'get' ? 'selected' : ''}>读取</option>
+                <option value="set" ${op.storageAction === 'set' ? 'selected' : ''}>写入</option>
+                <option value="remove" ${op.storageAction === 'remove' ? 'selected' : ''}>删除</option>
+                <option value="clear" ${op.storageAction === 'clear' ? 'selected' : ''}>清空</option>
+              </select>
+            </div>
+          </div>
+          ${op.storageAction !== 'clear' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>键名 (支持变量)</label>
+              <input type="text" class="field-storageKey" data-id="${op.id}" value="${this.escapeHtml(op.storageKey || '')}" placeholder="myKey">
+            </div>
+            ${op.storageAction === 'set' ? `
+            <div class="field-group flex-2">
+              <label>值 (支持变量)</label>
+              <input type="text" class="field-storageValue" data-id="${op.id}" value="${this.escapeHtml(op.storageValue || '')}" placeholder="要存储的值">
+            </div>` : ''}
+          </div>` : ''}
+          ${op.storageAction === 'get' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>保存到变量 (留空则不保存)</label>
+              <input type="text" class="field-storageVariable" data-id="${op.id}" value="${this.escapeHtml(op.storageVariable || '')}" placeholder="storedValue">
+            </div>
+          </div>` : ''}
+          <div class="storage-hint">💡 读取的值可保存到自定义变量，后续用 {{var:变量名}} 引用</div>`;
+        break;
+
+      case 'navigate':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>导航操作</label>
+              <select class="field-navigateAction" data-id="${op.id}">
+                <option value="url" ${op.navigateAction === 'url' ? 'selected' : ''}>跳转到URL</option>
+                <option value="back" ${op.navigateAction === 'back' ? 'selected' : ''}>后退</option>
+                <option value="forward" ${op.navigateAction === 'forward' ? 'selected' : ''}>前进</option>
+                <option value="reload" ${op.navigateAction === 'reload' ? 'selected' : ''}>重新加载</option>
+              </select>
+            </div>
+            ${op.navigateAction === 'url' ? `
+            <div class="field-group flex-1">
+              <label>等待加载</label>
+              <select class="field-navigateWaitLoad" data-id="${op.id}">
+                <option value="true" ${op.navigateWaitLoad !== false ? 'selected' : ''}>是 (保留历史)</option>
+                <option value="false" ${op.navigateWaitLoad === false ? 'selected' : ''}>否 (替换历史)</option>
+              </select>
+            </div>` : ''}
+          </div>
+          ${op.navigateAction === 'url' ? `
+          <div class="field-group">
+            <label>目标URL (支持变量，支持相对路径)</label>
+            <input type="text" class="field-navigateUrl" data-id="${op.id}" value="${this.escapeHtml(op.navigateUrl || '')}" placeholder="https://example.com 或 /path">
+          </div>` : ''}
+          <div class="navigate-hint">💡 跳转URL后页面会重新加载，建议作为单次操作的最后一步</div>`;
+        break;
     }
 
     fields += `
@@ -1300,7 +1502,20 @@ class OperationManager {
       'field-cookiePath': 'cookiePath',
       'field-cookieMaxAge': 'cookieMaxAge',
       'field-cookieVariable': 'cookieVariable',
-      'field-hoverDuration': 'hoverDuration'
+      'field-hoverDuration': 'hoverDuration',
+      'field-ifSelector': 'ifSelector',
+      'field-ifVariableName': 'ifVariableName',
+      'field-ifVariableValue': 'ifVariableValue',
+      'field-fileUrl': 'fileUrl',
+      'field-fileName': 'fileName',
+      'field-varName': 'varName',
+      'field-varValue': 'varValue',
+      'field-attrName': 'attrName',
+      'field-attrValue': 'attrValue',
+      'field-storageKey': 'storageKey',
+      'field-storageValue': 'storageValue',
+      'field-storageVariable': 'storageVariable',
+      'field-navigateUrl': 'navigateUrl'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -1394,6 +1609,55 @@ class OperationManager {
       });
     });
 
+    document.querySelectorAll('.field-ifMode').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'ifMode', e.target.value));
+    });
+
+    document.querySelectorAll('.field-ifConditionType').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'ifConditionType', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-varAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'varAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-attrAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'attrAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-storageType').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'storageType', e.target.value));
+    });
+
+    document.querySelectorAll('.field-storageAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'storageAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-navigateAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'navigateAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-navigateWaitLoad').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'navigateWaitLoad', e.target.value === 'true');
+      });
+    });
+
     ['field-modCtrl', 'field-modShift', 'field-modAlt'].forEach(cls => {
       document.querySelectorAll(`.${cls}`).forEach(cb => {
         cb.addEventListener('change', (e) => {
@@ -1439,7 +1703,7 @@ class OperationManager {
   }
 
   getIcon(type) {
-    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎', httpRequest: '🌐', tab: '🗂', notification: '🔔', cookie: '🍪', hover: '🖱', doubleClick: '👆👆' };
+    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎', httpRequest: '🌐', tab: '🗂', notification: '🔔', cookie: '🍪', hover: '🖱', doubleClick: '👆👆', if: '🔀', fileUpload: '📁', setVariable: '📦', setAttribute: '🏷', storage: '🗄', navigate: '🧭' };
     return icons[type] || '❓';
   }
 
@@ -1473,17 +1737,32 @@ class OperationManager {
   }
 
   showHelp() {
-    alert(`📖 使用帮助 v1.4.0
+    alert(`📖 使用帮助 v1.7.0
 
 【操作类型】
-📝 输入   - 填写表单内容 (支持变量)
-👆 点击   - 点击任意元素
-↕️ 滑动   - 滚动到指定位置
-🔄 刷新   - 重新加载页面
-⏳ 等待   - 等待固定时长 / 元素出现 / 元素消失
-📋 选择   - 操作下拉列表 (按值/索引/文本)
-⚡ 脚本   - 执行自定义 JavaScript
-🔍 提取   - 获取元素文本/属性值
+📝 输入       - 填写表单内容 (支持变量)
+👆 点击       - 点击任意元素
+↕️ 滑动       - 滚动到指定位置
+🔄 刷新       - 重新加载页面
+⏳ 等待       - 等待固定时长 / 元素出现 / 元素消失
+📋 选择       - 操作下拉列表 (按值/索引/文本)
+⚡ 脚本       - 执行自定义 JavaScript
+🔍 提取       - 获取元素文本/属性值
+⌨️ 键盘       - 模拟键盘按键/组合键
+📷 截屏       - 整页/可视区域截图
+📎 剪贴板     - 读写剪贴板内容
+🌐 HTTP       - 发起 HTTP 请求
+🗂 标签页     - 打开/关闭/重载标签页
+🔔 通知       - 发送系统通知
+🍪 Cookie     - 读写删除 Cookie
+🖱 悬停       - 触发鼠标悬停事件
+👆👆 双击     - 触发双击事件
+🔀 条件判断   - 满足/不满足条件时跳过当前迭代
+📁 文件上传   - 通过 URL 上传文件到 input[type=file]
+📦 变量设置   - 设置/追加/自增/清除自定义变量
+🏷 元素属性   - 设置/移除/切换元素属性
+🗄 本地存储   - 读写 localStorage/sessionStorage
+🧭 页面导航   - 跳转URL/后退/前进/重新加载
 
 【元素拾取器】
 点击 🎯 按钮可进入拾取模式
@@ -1502,6 +1781,7 @@ XPath: //button[contains(text(),'登录')]
 {{randomInt:min:max}} - 范围内随机整数
 {{uuid}}       - 随机 UUID
 {{loopIndex}}  - 当前循环次数 (从1开始)
+{{var:变量名}} - 引用 setVariable 操作设置的变量
 
 【脚本执行】
 可用函数: findElement(selector), sleep(ms)

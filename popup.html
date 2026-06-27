@@ -10,7 +10,7 @@
   <div class="container">
     <div class="header">
       <h2>🎯 网页操作执行器</h2>
-      <span class="version">v1.5.0</span>
+      <span class="version">v1.7.0</span>
     </div>
 
     <!-- 操作列表 -->
@@ -129,6 +129,24 @@
       <button id="addDoubleClick" class="btn btn-dblclick" title="添加双击操作">
         <span class="btn-icon">👆👆</span> 双击
       </button>
+      <button id="addIf" class="btn btn-if" title="添加条件判断操作">
+        <span class="btn-icon">🔀</span> 条件
+      </button>
+      <button id="addFileUpload" class="btn btn-fileupload" title="添加文件上传操作">
+        <span class="btn-icon">📁</span> 上传
+      </button>
+      <button id="addSetVariable" class="btn btn-setvariable" title="添加变量设置操作">
+        <span class="btn-icon">📦</span> 变量
+      </button>
+      <button id="addSetAttribute" class="btn btn-setattribute" title="添加元素属性操作">
+        <span class="btn-icon">🏷</span> 属性
+      </button>
+      <button id="addStorage" class="btn btn-storage" title="添加本地存储操作">
+        <span class="btn-icon">🗄</span> 存储
+      </button>
+      <button id="addNavigate" class="btn btn-navigate" title="添加页面导航操作">
+        <span class="btn-icon">🧭</span> 导航
+      </button>
     </div>
 
     <!-- 执行控制 -->
@@ -178,7 +196,7 @@
         <input type="file" id="importFile" accept=".json" style="display:none">
       </div>
       <div class="var-hint">
-        💡 支持变量: <code>{{timestamp}}</code> <code>{{date}}</code> <code>{{random}}</code> <code>{{uuid}}</code> <code>{{loopIndex}}</code>
+        💡 支持变量: <code>{{timestamp}}</code> <code>{{date}}</code> <code>{{random}}</code> <code>{{uuid}}</code> <code>{{loopIndex}}</code> <code>{{var:变量名}}</code>
       </div>
     </div>
 

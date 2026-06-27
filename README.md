@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/diaoyunxi/web-action-executor)
+[![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)](https://github.com/diaoyunxi/web-action-executor)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
@@ -44,6 +44,18 @@
 | **键盘** | ⌨️ | 模拟键盘按键/组合键 | Tab、Enter、Ctrl+A |
 | **截屏** | 📷 | 捕获页面或元素截图 | 截图存档 |
 | **剪贴板** | 📎 | 读写剪贴板内容 | 复制粘贴数据 |
+| **HTTP请求** | 🌐 | 发起 GET/POST/PUT/DELETE 请求 | 调用 API、获取数据 |
+| **标签页** | 🗂 | 打开/关闭/重载/聚焦标签页 | 多页面操作 |
+| **通知** | 🔔 | 发送系统通知 | 执行结果提醒 |
+| **Cookie** | 🍪 | 读取/设置/删除 Cookie | 会话管理 |
+| **悬停** | 🖱 | 触发鼠标悬停事件 | 下拉菜单触发 |
+| **双击** | 👆👆 | 触发双击事件 | 文本选中、快速操作 |
+| **条件判断** | 🔀 | 条件不满足时跳过当前迭代 | 仅在元素存在时执行 |
+| **文件上传** | 📁 | 通过 URL 上传文件到文件输入框 | 自动化表单上传 |
+| **变量设置** | 📦 | 设置/追加/自增/清除自定义变量 | 跨步骤数据传递 |
+| **元素属性** | 🏷 | 设置/移除/切换元素属性 | 禁用按钮、勾选框 |
+| **本地存储** | 🗄 | 读写 localStorage/sessionStorage | 站点数据管理 |
+| **页面导航** | 🧭 | 跳转URL/后退/前进/重新加载 | 多页面流程 |
 
 ### 🔄 重复执行模式
 
@@ -164,7 +176,7 @@ git clone https://github.com/your-repo/web-action-executor.git
 
 ```
 ┌──────────────────────────────────────────┐
-│  🎯 网页操作执行器              v1.5.0  │
+│  🎯 网页操作执行器              v1.7.0  │
 ├──────────────────────────────────────────┤
 │  ┌────────────────────────────────────┐  │
 │  │ #1 📝 输入用户名                   │  │
@@ -604,6 +616,25 @@ chrome.storage.local.get(null, console.log)
 ---
 
 ## 📝 更新日志
+
+### v1.7.0 (2026-06-27)
+
+**新增**
+- ✨ 条件判断操作 - 基于元素存在性/可见性/变量值决定是否跳过当前迭代，支持 skip 与 pass 两种模式
+- ✨ 文件上传操作 - 通过 URL 拉取文件并填充到 `input[type=file]`，支持自定义保存文件名
+- ✨ 变量设置操作 - 设置/追加/自增/清除自定义变量，支持通过 `{{var:变量名}}` 在后续操作中引用
+- ✨ 元素属性操作 - 设置/移除/切换元素属性，自动触发 change 事件
+- ✨ 本地存储操作 - 读取/写入/删除/清空 localStorage 与 sessionStorage
+- ✨ 页面导航操作 - 跳转 URL（支持相对路径）/后退/前进/重新加载，可选保留或替换历史
+- ✨ 新增自定义变量 `{{var:变量名}}` 变量替换语法
+
+**修复**
+- 🐛 修复 `renderFields` 方法因多余的闭合花括号导致 popup.js 语法错误、扩展弹窗无法加载的严重问题
+
+### v1.6.0
+
+**新增**
+- ✨ HTTP请求操作、标签页操作、通知操作、Cookie操作、悬停操作、双击操作
 
 ### v1.5.0 (2026-06-24)
 
