@@ -1,6 +1,6 @@
 /**
- * 网页操作执行器 - 后台服务 v1.5.0
- * 支持: 扩展生命周期、消息转发、快捷键命令、截屏、数据存储
+ * 网页操作执行器 - 后台服务 v1.8.0
+ * 支持: 扩展生命周期、消息转发、快捷键命令、截屏、数据存储、自动更新检查
  */
 
 // 安装/更新时初始化
@@ -23,6 +23,14 @@ chrome.runtime.onInstalled.addListener((details) => {
         conditionTimeout: 30000
       }
     });
+  }
+
+  // Create periodic update-check alarm (every 24 hours)
+  chrome.alarms.create(UPDATE_ALARM, { periodInMinutes: 1440 });
+
+  // Check for update on install/update
+  if (details.reason === 'install' || details.reason === 'update') {
+    checkForUpdate();
   }
 });
 
@@ -144,5 +152,117 @@ chrome.commands.onCommand.addListener(async (command) => {
     }
   } catch (error) {
     console.error('处理快捷键命令出错:', error);
+  }
+});
+
+// --- Update Checker ---
+// Checks GitHub for the latest release/tag and notifies the user when a newer
+// version is available. Runs on install/update and every 24 hours via alarm.
+const GITHUB_REPO = "diaoyunxi/web-action";
+const UPDATE_ALARM = "update-check";
+
+function compareVersions(v1, v2) {
+  const a = v1.replace(/^v/, "").split(".");
+  const b = v2.replace(/^v/, "").split(".");
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const na = parseInt(a[i] || 0, 10);
+    const nb = parseInt(b[i] || 0, 10);
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
+
+async function checkForUpdate() {
+  try {
+    const manifest = chrome.runtime.getManifest();
+    const currentVersion = manifest.version;
+
+    // Try Releases API first
+    let latestVersion = null;
+    let releaseUrl = null;
+    try {
+      const resp = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
+        {
+          signal: AbortSignal.timeout(10000),
+        }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        latestVersion = data.tag_name;
+        releaseUrl = data.html_url;
+      }
+    } catch (e) {
+      console.warn("Update check: Releases API failed", e);
+    }
+
+    // Fallback to Tags API
+    if (!latestVersion) {
+      try {
+        const resp = await fetch(
+          `https://api.github.com/repos/${GITHUB_REPO}/tags`,
+          {
+            signal: AbortSignal.timeout(10000),
+          }
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.length > 0) {
+            latestVersion = data[0].name;
+            releaseUrl = `https://github.com/${GITHUB_REPO}/releases/tag/${latestVersion}`;
+          }
+        }
+      } catch (e) {
+        console.warn("Update check: Tags API failed", e);
+      }
+    }
+
+    if (!latestVersion) {
+      console.log("Update check: could not determine latest version");
+      return;
+    }
+
+    if (compareVersions(latestVersion, currentVersion) > 0) {
+      const notificationId = `update-available-${Date.now()}`;
+      chrome.notifications.create(notificationId, {
+        type: "basic",
+        iconUrl: "icons/icon128.png",
+        title: "发现新版本",
+        message: `当前版本 v${currentVersion}，最新版本 ${latestVersion}\n点击此处前往更新`,
+        priority: 2,
+      });
+
+      // Store release URL for click handler
+      chrome.storage.local.set({
+        [`updateUrl_${notificationId}`]: releaseUrl,
+      });
+    } else {
+      console.log(
+        `Update check: current version v${currentVersion} is up to date`
+      );
+    }
+  } catch (e) {
+    console.warn("Update check failed", e);
+  }
+}
+
+// Periodic update-check alarm handler (every 24 hours)
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm && alarm.name === UPDATE_ALARM) {
+    checkForUpdate();
+  }
+});
+
+// Handle notification click - open release page in a new tab
+chrome.notifications.onClicked.addListener((notificationId) => {
+  if (notificationId.startsWith("update-available-")) {
+    chrome.storage.local.get([`updateUrl_${notificationId}`], (result) => {
+      const url = result[`updateUrl_${notificationId}`];
+      if (url) {
+        chrome.tabs.create({ url: url });
+      }
+      chrome.notifications.clear(notificationId);
+    });
   }
 });

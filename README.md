@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)](https://github.com/diaoyunxi/web-action-executor)
+[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)](https://github.com/diaoyunxi/web-action-executor)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
@@ -176,7 +176,7 @@ git clone https://github.com/your-repo/web-action-executor.git
 
 ```
 ┌──────────────────────────────────────────┐
-│  🎯 网页操作执行器              v1.7.0  │
+│  🎯 网页操作执行器              v1.8.0  │
 ├──────────────────────────────────────────┤
 │  ┌────────────────────────────────────┐  │
 │  │ #1 📝 输入用户名                   │  │
@@ -616,6 +616,14 @@ chrome.storage.local.get(null, console.log)
 ---
 
 ## 📝 更新日志
+
+### v1.8.0 (2026-06-28)
+
+**新增**
+- ✨ 自动更新检查 - 扩展安装/更新时及每 24 小时（通过 `chrome.alarms`）自动检查 GitHub 最新版本，优先 Releases API、回退 Tags API；发现新版本时弹出系统通知，点击通知即可在新标签页打开 GitHub Releases 页面更新
+
+**变更**
+- 📌 `manifest.json` 新增 `alarms` 与 `notifications` 权限以支持定时检查与更新通知
 
 ### v1.7.0 (2026-06-27)
 
