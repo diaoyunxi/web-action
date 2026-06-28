@@ -384,6 +384,7 @@ body {
 .btn-setattribute { background: #3949AB; color: white; }
 .btn-storage { background: #00695C; color: white; }
 .btn-navigate { background: #AD1457; color: white; }
+.btn-mediacontrol { background: #7C4DFF; color: white; }
 
 .btn-execute { background: #E65100; color: white; flex: 2; font-weight: 600; font-size: 14px; }
 .btn-stop    { background: #C62828; color: white; flex: 2; font-weight: 600; font-size: 14px; animation: pulse 1.5s infinite; }
@@ -761,7 +762,9 @@ body {
 .fileupload-hint,
 .attr-hint,
 .storage-hint,
-.navigate-hint {
+.navigate-hint,
+.wait-hint,
+.mediacontrol-hint {
   font-size: 11px;
   color: #666;
   background: #f5f5f5;
@@ -800,4 +803,12 @@ body {
 
 .navigate-hint {
   border-left: 3px solid #AD1457;
+}
+
+.wait-hint {
+  border-left: 3px solid #FF9800;
+}
+
+.mediacontrol-hint {
+  border-left: 3px solid #7C4DFF;
 }

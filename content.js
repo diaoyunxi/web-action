@@ -1,9 +1,9 @@
 /**
- * 网页操作执行器 - 内容脚本 v1.7.0
+ * 网页操作执行器 - 内容脚本 v1.9.0
  * 在目标页面中执行实际操作
  * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、剪贴板、
  *       HTTP请求、标签页、通知、Cookie、悬停、双击、条件判断、文件上传、
- *       变量设置、元素属性、本地存储、页面导航
+ *       变量设置、元素属性、本地存储、页面导航、媒体控制
  */
 
 // 用于条件判断操作：抛出该错误将跳过当前循环迭代的剩余操作
@@ -358,6 +358,7 @@ class OperationExecutor {
       case 'setAttribute': await this.executeSetAttribute(operation); break;
       case 'storage': await this.executeStorage(operation); break;
       case 'navigate': await this.executeNavigate(operation); break;
+      case 'mediaControl': await this.executeMediaControl(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -594,8 +595,81 @@ class OperationExecutor {
         break;
       }
 
+      case 'scheduledTime': {
+        // 等待到指定时刻（HH:MM:SS），如已过则等待到次日同时刻
+        const rawTime = this.substituteVariables(operation.waitScheduledTime || '').trim();
+        if (!rawTime) {
+          throw new Error('定时等待缺少目标时间（格式 HH:MM:SS 或 HH:MM:SS.mmm）');
+        }
+        const targetMs = this.parseScheduledTimeToDelay(rawTime);
+        if (targetMs <= 0) {
+          // 已过该时刻，按规则等待到明天同时刻
+          console.warn(`⏳ 当前已过 ${rawTime}，将等待到次日同时刻`);
+        }
+        console.log(`⏳ 定时等待 ${rawTime}，将等待 ${Math.max(0, targetMs)} ms`);
+        await this.sleepWithStopCheck(targetMs);
+        break;
+      }
+
+      case 'randomDelay': {
+        const minMs = parseInt(operation.waitMinDelay) || 0;
+        const maxMs = parseInt(operation.waitMaxDelay) || 0;
+        if (maxMs < minMs) {
+          throw new Error(`随机等待范围无效: min(${minMs}) > max(${maxMs})`);
+        }
+        const delta = maxMs - minMs;
+        const duration = delta > 0 ? minMs + Math.floor(Math.random() * (delta + 1)) : minMs;
+        console.log(`⏳ 随机等待 ${duration} ms (范围 ${minMs}-${maxMs})`);
+        await this.sleepWithStopCheck(duration);
+        break;
+      }
+
       default:
         await this.sleep(parseInt(operation.waitDuration) || 1000);
+    }
+  }
+
+  // 将 HH:MM:SS[.mmm] 格式的时刻转换为距离当前时刻的毫秒数
+  // 若该时刻今天已过，则计算到明天同时刻的毫秒数
+  parseScheduledTimeToDelay(timeStr) {
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?$/);
+    if (!match) {
+      throw new Error(`定时时间格式无效: ${timeStr}，正确格式为 HH:MM:SS 或 HH:MM:SS.mmm`);
+    }
+    const hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const seconds = match[3] ? parseInt(match[3], 10) : 0;
+    const ms = match[4] ? parseInt(match[4].padEnd(3, '0'), 10) : 0;
+
+    if (hours > 23 || minutes > 59 || seconds > 59) {
+      throw new Error(`定时时间数值越界: ${timeStr}`);
+    }
+
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(hours, minutes, seconds, ms);
+
+    let diff = target.getTime() - now.getTime();
+    if (diff < 0) {
+      // 已过该时刻，目标改为明天同时刻
+      target.setDate(target.getDate() + 1);
+      diff = target.getTime() - now.getTime();
+    }
+    return diff;
+  }
+
+  // 支持停止检查的长时间 sleep
+  async sleepWithStopCheck(ms) {
+    if (ms <= 0) return;
+    const step = 200;
+    let remaining = ms;
+    while (remaining > 0) {
+      if (this.shouldStop) {
+        throw new Error('用户停止执行');
+      }
+      const wait = Math.min(step, remaining);
+      await this.sleep(wait);
+      remaining -= wait;
     }
   }
 
@@ -1401,6 +1475,121 @@ class OperationExecutor {
       default:
         throw new Error(`未知导航操作: ${navigateAction}`);
     }
+  }
+
+  // ==================== 媒体控制操作 ====================
+
+  async executeMediaControl(operation) {
+    const mediaAction = operation.mediaAction || 'play';
+
+    // 查找目标媒体元素
+    let mediaElement = null;
+    if (operation.selector) {
+      const el = this.findElement(operation.selector);
+      if (!el) {
+        throw new Error(`未找到媒体元素: ${operation.selector}`);
+      }
+      mediaElement = el;
+    } else {
+      // 未指定选择器时，自动取页面中第一个 audio/video 元素
+      mediaElement = document.querySelector('video, audio');
+      if (!mediaElement) {
+        throw new Error('未指定选择器且页面中未找到 <video>/<audio> 元素');
+      }
+    }
+
+    if (!mediaElement || typeof mediaElement.play !== 'function') {
+      throw new Error(`目标元素不是媒体元素: <${mediaElement?.tagName?.toLowerCase() || 'unknown'}>`);
+    }
+
+    mediaElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(150);
+
+    switch (mediaAction) {
+      case 'play':
+        try {
+          await mediaElement.play();
+          console.log('🎬 播放媒体');
+        } catch (e) {
+          throw new Error(`播放失败: ${e.message}`);
+        }
+        break;
+      case 'pause':
+        mediaElement.pause();
+        console.log('⏸ 暂停媒体');
+        break;
+      case 'toggle':
+        if (mediaElement.paused) {
+          try {
+            await mediaElement.play();
+            console.log('🎬 切换为播放');
+          } catch (e) {
+            throw new Error(`播放失败: ${e.message}`);
+          }
+        } else {
+          mediaElement.pause();
+          console.log('⏸ 切换为暂停');
+        }
+        break;
+      case 'mute':
+        mediaElement.muted = true;
+        console.log('🔇 静音');
+        break;
+      case 'unmute':
+        mediaElement.muted = false;
+        console.log('🔊 取消静音');
+        break;
+      case 'setVolume': {
+        const volume = parseFloat(operation.mediaVolume);
+        if (isNaN(volume) || volume < 0 || volume > 1) {
+          throw new Error(`音量值无效 (0-1): ${operation.mediaVolume}`);
+        }
+        mediaElement.volume = volume;
+        console.log(`🔊 设置音量: ${volume}`);
+        break;
+      }
+      case 'seek': {
+        const seekTime = parseFloat(operation.mediaSeekTime);
+        if (isNaN(seekTime) || seekTime < 0) {
+          throw new Error(`跳转时间无效: ${operation.mediaSeekTime}`);
+        }
+        try {
+          mediaElement.currentTime = seekTime;
+          console.log(`⏩ 跳转到 ${seekTime} 秒`);
+        } catch (e) {
+          throw new Error(`跳转失败: ${e.message}`);
+        }
+        break;
+      }
+      case 'playbackRate': {
+        const rate = parseFloat(operation.mediaPlaybackRate);
+        if (isNaN(rate) || rate <= 0) {
+          throw new Error(`播放速率无效 (>0): ${operation.mediaPlaybackRate}`);
+        }
+        mediaElement.playbackRate = rate;
+        console.log(`⏩ 设置播放速率: ${rate}x`);
+        break;
+      }
+      case 'fullscreen':
+        if (mediaElement.requestFullscreen) {
+          try {
+            await mediaElement.requestFullscreen();
+            console.log('🖥 进入全屏');
+          } catch (e) {
+            throw new Error(`进入全屏失败: ${e.message}`);
+          }
+        } else {
+          throw new Error('当前浏览器不支持全屏 API');
+        }
+        break;
+      default:
+        throw new Error(`未知媒体操作: ${mediaAction}`);
+    }
+
+    // 触发 input 事件以便框架感知
+    mediaElement.dispatchEvent(new Event('input', { bubbles: true }));
+    mediaElement.dispatchEvent(new Event('change', { bubbles: true }));
+    this.highlightElement(mediaElement, '#7C4DFF');
   }
 
   // ==================== 辅助等待方法 ====================

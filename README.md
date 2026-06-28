@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)](https://github.com/diaoyunxi/web-action-executor)
+[![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)](https://github.com/diaoyunxi/web-action)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
@@ -56,6 +56,7 @@
 | **元素属性** | 🏷 | 设置/移除/切换元素属性 | 禁用按钮、勾选框 |
 | **本地存储** | 🗄 | 读写 localStorage/sessionStorage | 站点数据管理 |
 | **页面导航** | 🧭 | 跳转URL/后退/前进/重新加载 | 多页面流程 |
+| **媒体控制** | 🎬 | 播放/暂停/音量/跳转/速率/全屏 | HTML5 媒体自动化 |
 
 ### 🔄 重复执行模式
 
@@ -86,7 +87,7 @@
 
 ```bash
 # 1. 克隆或下载本项目
-git clone https://github.com/your-repo/web-action-executor.git
+git clone https://github.com/diaoyunxi/web-action.git
 
 # 2. 打开 Chrome 扩展页面
 # 地址栏输入：chrome://extensions/
@@ -168,6 +169,33 @@ git clone https://github.com/your-repo/web-action-executor.git
 执行：自动完成10次数据录入
 ```
 
+### 示例 5：定时抢购（定时等待 + 随机等待）
+
+```
+操作步骤：
+1. ⏳ 等待 → 等待类型: 定时等待 → 目标时刻: 10:00:00.000
+2. 👆 点击 → .refresh-btn (刷新抢购页)
+3. ⏳ 等待 → 等待类型: 随机等待 → 最小 50ms → 最大 200ms
+4. 👆 点击 → .buy-now-button (立即购买)
+5. ⏳ 等待 → 等待类型: 随机等待 → 最小 100ms → 最大 300ms
+6. 👆 点击 → .confirm-pay (确认支付)
+
+执行：在 10:00:00.000 精准触发抢购，每步之间加入随机延迟模拟人工节奏
+```
+
+### 示例 6：HTML5 视频自动化（媒体控制）
+
+```
+操作步骤：
+1. 🎬 媒体 → 操作: 跳转到指定秒 → 秒数: 30
+2. 🎬 媒体 → 操作: 设置播放速率 → 速率: 2 (2倍速)
+3. 🎬 媒体 → 操作: 设置音量 → 音量: 0.5
+4. 🎬 媒体 → 操作: 播放
+
+执行：将页面视频跳到 30 秒位置、2 倍速、半音量播放
+未指定选择器时自动取页面中第一个 video/audio 元素
+```
+
 ---
 
 ## 📖 使用指南
@@ -176,7 +204,7 @@ git clone https://github.com/your-repo/web-action-executor.git
 
 ```
 ┌──────────────────────────────────────────┐
-│  🎯 网页操作执行器              v1.8.0  │
+│  🎯 网页操作执行器              v1.9.0  │
 ├──────────────────────────────────────────┤
 │  ┌────────────────────────────────────┐  │
 │  │ #1 📝 输入用户名                   │  │
@@ -557,8 +585,8 @@ web-action-executor/
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-repo/web-action-executor.git
-cd web-action-executor
+git clone https://github.com/diaoyunxi/web-action.git
+cd web-action
 
 # 使用任意代码编辑器打开
 code .
@@ -616,6 +644,20 @@ chrome.storage.local.get(null, console.log)
 ---
 
 ## 📝 更新日志
+
+### v1.9.0 (2026-06-29)
+
+**新增**
+- ✨ 定时等待操作（waitType: `scheduledTime`）- 等待到当天指定时刻，若已过则等待到次日同时刻；支持 `HH:MM:SS` 与 `HH:MM:SS.mmm`（毫秒级精度），常用于定时抢购、定时任务调度
+- ✨ 随机等待操作（waitType: `randomDelay`）- 在 `[最小, 最大]` 毫秒区间内随机取值等待，模拟人工操作节奏，规避反爬识别
+- ✨ 媒体控制操作（type: `mediaControl`）- 控制 HTML5 `<video>`/`<audio>` 元素：播放、暂停、播放/暂停切换、静音/取消静音、设置音量、跳转、设置播放速率、进入全屏；未指定选择器时自动取页面中第一个媒体元素
+- ✨ 长时间等待支持中途停止检查（每 200ms 检测 `shouldStop` 状态）
+
+**变更**
+- 📌 `manifest.json` 版本升至 1.9.0，描述补充新功能
+- 📌 修正 `manifest.json` 与 README 中的仓库 URL 为实际的 `diaoyunxi/web-action`
+- 🎨 新增 `.btn-mediacontrol`、`.wait-hint`、`.mediacontrol-hint` 样式
+- 📚 README 新增"定时抢购"、"HTML5 视频自动化"使用示例
 
 ### v1.8.0 (2026-06-28)
 

@@ -1,6 +1,7 @@
 /**
- * 网页操作执行器 - 弹出窗口脚本 v1.7.0
- * 新增: 条件判断、文件上传、变量设置、元素属性、本地存储、页面导航
+ * 网页操作执行器 - 弹出窗口脚本 v1.9.0
+ * 新增: 条件判断、文件上传、变量设置、元素属性、本地存储、页面导航、
+ *       定时等待、随机等待、媒体控制
  */
 
 class OperationManager {
@@ -145,6 +146,7 @@ class OperationManager {
     document.getElementById('addSetAttribute').addEventListener('click', () => this.addOperation('setAttribute'));
     document.getElementById('addStorage').addEventListener('click', () => this.addOperation('storage'));
     document.getElementById('addNavigate').addEventListener('click', () => this.addOperation('navigate'));
+    document.getElementById('addMediaControl').addEventListener('click', () => this.addOperation('mediaControl'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -412,7 +414,8 @@ class OperationManager {
       setVariable: { ...baseOperation, type: 'setVariable', varName: '', varAction: 'set', varValue: '', description: '变量设置' },
       setAttribute: { ...baseOperation, type: 'setAttribute', selector: '', attrAction: 'set', attrName: '', attrValue: '', description: '元素属性' },
       storage: { ...baseOperation, type: 'storage', storageType: 'localStorage', storageAction: 'get', storageKey: '', storageValue: '', storageVariable: '', description: '本地存储' },
-      navigate: { ...baseOperation, type: 'navigate', navigateAction: 'url', navigateUrl: '', navigateWaitLoad: true, description: '页面导航' }
+      navigate: { ...baseOperation, type: 'navigate', navigateAction: 'url', navigateUrl: '', navigateWaitLoad: true, description: '页面导航' },
+      mediaControl: { ...baseOperation, type: 'mediaControl', selector: '', mediaAction: 'play', mediaVolume: '1', mediaSeekTime: '0', mediaPlaybackRate: '1', description: '媒体控制' }
     };
 
     if (typeMap[type]) {
@@ -468,7 +471,7 @@ class OperationManager {
 
   exportConfig() {
     const config = {
-      version: '1.7.0',
+      version: '1.9.0',
       exportTime: new Date().toISOString(),
       operations: this.operations,
       repeatSettings: {
@@ -956,6 +959,8 @@ class OperationManager {
               <option value="element" ${op.waitType === 'element' ? 'selected' : ''}>等待元素出现</option>
               <option value="elementVisible" ${op.waitType === 'elementVisible' ? 'selected' : ''}>等待元素可见</option>
               <option value="elementDisappear" ${op.waitType === 'elementDisappear' ? 'selected' : ''}>等待元素消失</option>
+              <option value="scheduledTime" ${op.waitType === 'scheduledTime' ? 'selected' : ''}>定时等待 (到指定时刻)</option>
+              <option value="randomDelay" ${op.waitType === 'randomDelay' ? 'selected' : ''}>随机等待 (区间)</option>
             </select>
           </div>
           ${op.waitType === 'fixed' ? `
@@ -964,7 +969,8 @@ class OperationManager {
               <label>等待时长(ms)</label>
               <input type="number" class="field-waitDuration" data-id="${op.id}" value="${op.waitDuration || 2000}" min="0">
             </div>
-          </div>` : `
+          </div>` : ''}
+          ${(op.waitType === 'element' || op.waitType === 'elementVisible' || op.waitType === 'elementDisappear') ? `
           <div class="field-row">
             <div class="field-group flex-2">
               <label>元素选择器 ${pickerButton(`waitSelectorOp-${op.id}`)}</label>
@@ -974,7 +980,27 @@ class OperationManager {
               <label>超时(ms)</label>
               <input type="number" class="field-waitTimeoutOp" data-id="${op.id}" value="${op.waitTimeout || 10000}" min="100">
             </div>
-          </div>`}`;
+          </div>` : ''}
+          ${op.waitType === 'scheduledTime' ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>目标时刻 (支持变量)</label>
+              <input type="text" class="field-waitScheduledTime" data-id="${op.id}" value="${this.escapeHtml(op.waitScheduledTime || '')}" placeholder="10:00:00 或 10:00:00.000">
+            </div>
+          </div>
+          <div class="wait-hint">💡 等待到当天该时刻；若已过则等待到次日同时刻；支持 HH:MM:SS 或 HH:MM:SS.mmm，常用于定时抢购、定时任务</div>` : ''}
+          ${op.waitType === 'randomDelay' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>最小等待(ms)</label>
+              <input type="number" class="field-waitMinDelay" data-id="${op.id}" value="${op.waitMinDelay || 500}" min="0">
+            </div>
+            <div class="field-group flex-1">
+              <label>最大等待(ms)</label>
+              <input type="number" class="field-waitMaxDelay" data-id="${op.id}" value="${op.waitMaxDelay || 2000}" min="0">
+            </div>
+          </div>
+          <div class="wait-hint">💡 在 [最小, 最大] 范围内随机取一个毫秒数等待；适合模拟人工节奏，避免被反爬识别</div>` : ''}`;
         break;
 
       case 'select':
@@ -1453,6 +1479,52 @@ class OperationManager {
           </div>` : ''}
           <div class="navigate-hint">💡 跳转URL后页面会重新加载，建议作为单次操作的最后一步</div>`;
         break;
+
+      case 'mediaControl':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>媒体元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="留空则自动取第一个 video/audio">
+            </div>
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-mediaAction" data-id="${op.id}">
+                <option value="play" ${op.mediaAction === 'play' ? 'selected' : ''}>播放</option>
+                <option value="pause" ${op.mediaAction === 'pause' ? 'selected' : ''}>暂停</option>
+                <option value="toggle" ${op.mediaAction === 'toggle' ? 'selected' : ''}>播放/暂停切换</option>
+                <option value="mute" ${op.mediaAction === 'mute' ? 'selected' : ''}>静音</option>
+                <option value="unmute" ${op.mediaAction === 'unmute' ? 'selected' : ''}>取消静音</option>
+                <option value="setVolume" ${op.mediaAction === 'setVolume' ? 'selected' : ''}>设置音量</option>
+                <option value="seek" ${op.mediaAction === 'seek' ? 'selected' : ''}>跳转到指定秒</option>
+                <option value="playbackRate" ${op.mediaAction === 'playbackRate' ? 'selected' : ''}>设置播放速率</option>
+                <option value="fullscreen" ${op.mediaAction === 'fullscreen' ? 'selected' : ''}>进入全屏</option>
+              </select>
+            </div>
+          </div>
+          ${op.mediaAction === 'setVolume' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>音量 (0-1，支持变量)</label>
+              <input type="text" class="field-mediaVolume" data-id="${op.id}" value="${this.escapeHtml(op.mediaVolume || '1')}" placeholder="0.5">
+            </div>
+          </div>` : ''}
+          ${op.mediaAction === 'seek' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>跳转秒数 (支持变量)</label>
+              <input type="text" class="field-mediaSeekTime" data-id="${op.id}" value="${this.escapeHtml(op.mediaSeekTime || '0')}" placeholder="30">
+            </div>
+          </div>` : ''}
+          ${op.mediaAction === 'playbackRate' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>播放速率 (>0，支持变量)</label>
+              <input type="text" class="field-mediaPlaybackRate" data-id="${op.id}" value="${this.escapeHtml(op.mediaPlaybackRate || '1')}" placeholder="2 (2倍速)">
+            </div>
+          </div>` : ''}
+          <div class="mediacontrol-hint">💡 控制 HTML5 &lt;video&gt;/&lt;audio&gt; 元素：播放、暂停、音量、跳转、速率、全屏等</div>`;
+        break;
     }
 
     fields += `
@@ -1515,7 +1587,13 @@ class OperationManager {
       'field-storageKey': 'storageKey',
       'field-storageValue': 'storageValue',
       'field-storageVariable': 'storageVariable',
-      'field-navigateUrl': 'navigateUrl'
+      'field-navigateUrl': 'navigateUrl',
+      'field-waitScheduledTime': 'waitScheduledTime',
+      'field-waitMinDelay': 'waitMinDelay',
+      'field-waitMaxDelay': 'waitMaxDelay',
+      'field-mediaVolume': 'mediaVolume',
+      'field-mediaSeekTime': 'mediaSeekTime',
+      'field-mediaPlaybackRate': 'mediaPlaybackRate'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -1523,7 +1601,7 @@ class OperationManager {
         input.addEventListener('change', (e) => {
           const id = parseInt(e.target.dataset.id);
           let val = e.target.value;
-          if (['field-position', 'field-delay', 'field-waitDuration', 'field-waitTimeout', 'field-waitTimeoutOp', 'field-hoverDuration'].includes(cls)) {
+          if (['field-position', 'field-delay', 'field-waitDuration', 'field-waitTimeout', 'field-waitTimeoutOp', 'field-hoverDuration', 'field-waitMinDelay', 'field-waitMaxDelay'].includes(cls)) {
             val = parseInt(val) || 0;
           }
           this.updateOperation(id, prop, val);
@@ -1658,6 +1736,13 @@ class OperationManager {
       });
     });
 
+    document.querySelectorAll('.field-mediaAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'mediaAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
     ['field-modCtrl', 'field-modShift', 'field-modAlt'].forEach(cls => {
       document.querySelectorAll(`.${cls}`).forEach(cb => {
         cb.addEventListener('change', (e) => {
@@ -1703,7 +1788,7 @@ class OperationManager {
   }
 
   getIcon(type) {
-    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎', httpRequest: '🌐', tab: '🗂', notification: '🔔', cookie: '🍪', hover: '🖱', doubleClick: '👆👆', if: '🔀', fileUpload: '📁', setVariable: '📦', setAttribute: '🏷', storage: '🗄', navigate: '🧭' };
+    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎', httpRequest: '🌐', tab: '🗂', notification: '🔔', cookie: '🍪', hover: '🖱', doubleClick: '👆👆', if: '🔀', fileUpload: '📁', setVariable: '📦', setAttribute: '🏷', storage: '🗄', navigate: '🧭', mediaControl: '🎬' };
     return icons[type] || '❓';
   }
 
@@ -1737,14 +1822,14 @@ class OperationManager {
   }
 
   showHelp() {
-    alert(`📖 使用帮助 v1.7.0
+    alert(`📖 使用帮助 v1.9.0
 
 【操作类型】
 📝 输入       - 填写表单内容 (支持变量)
 👆 点击       - 点击任意元素
 ↕️ 滑动       - 滚动到指定位置
 🔄 刷新       - 重新加载页面
-⏳ 等待       - 等待固定时长 / 元素出现 / 元素消失
+⏳ 等待       - 固定时长 / 元素出现 / 元素消失 / 定时等待 / 随机等待
 📋 选择       - 操作下拉列表 (按值/索引/文本)
 ⚡ 脚本       - 执行自定义 JavaScript
 🔍 提取       - 获取元素文本/属性值
@@ -1763,6 +1848,25 @@ class OperationManager {
 🏷 元素属性   - 设置/移除/切换元素属性
 🗄 本地存储   - 读写 localStorage/sessionStorage
 🧭 页面导航   - 跳转URL/后退/前进/重新加载
+🎬 媒体       - 播放/暂停/静音/音量/跳转/速率/全屏 (video/audio)
+
+【等待操作详解】
+- 固定时长：等待 N 毫秒
+- 等待元素出现/可见/消失：基于选择器判断
+- 定时等待：等待到指定时刻 (HH:MM:SS 或 HH:MM:SS.mmm)，
+  若该时刻今天已过则等到次日同时刻，毫秒级精度，适合定时抢购
+- 随机等待：在 [最小, 最大] 毫秒区间内随机等待，
+  适合模拟人工操作节奏，避免被反爬识别
+
+【媒体控制详解】
+控制 HTML5 媒体元素 (video/audio)
+- 播放/暂停/播放暂停切换
+- 静音/取消静音
+- 设置音量 (0-1)
+- 跳转到指定秒数
+- 设置播放速率 (>0，2 表示 2 倍速)
+- 进入全屏
+未指定选择器时自动取页面中第一个 video/audio 元素
 
 【元素拾取器】
 点击 🎯 按钮可进入拾取模式
