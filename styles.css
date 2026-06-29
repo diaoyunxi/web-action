@@ -809,6 +809,55 @@ body {
   border-left: 3px solid #FF9800;
 }
 
-.mediacontrol-hint {
+.type-mediacontrol-hint {
   border-left: 3px solid #7C4DFF;
 }
+
+/* ==================== v2.0.0 新增操作类型样式 ==================== */
+
+.type-rightClick { background: #FFEBEE; color: #C62828; }
+.type-focus { background: #E3F2FD; color: #1565C0; }
+.type-clear { background: #E0F7FA; color: #00838F; }
+.type-scrollToElement { background: #E1F5FE; color: #0277BD; }
+.type-drag { background: #F3E5F5; color: #6A1B9A; }
+.type-mouseWheel { background: #FFF3E0; color: #E65100; }
+.type-log { background: #F1F8E9; color: #33691E; }
+.type-hideElement { background: #ECEFF1; color: #455A64; }
+.type-jsonExtract { background: #E0F2F1; color: #00695C; }
+
+.btn-rightclick { background: #D32F2F; color: white; }
+.btn-focus { background: #1976D2; color: white; }
+.btn-clear { background: #00838F; color: white; }
+.btn-scrolltoelement { background: #0277BD; color: white; }
+.btn-drag { background: #6A1B9A; color: white; }
+.btn-mousewheel { background: #E65100; color: white; }
+.btn-log { background: #33691E; color: white; }
+.btn-hideelement { background: #455A64; color: white; }
+.btn-jsonextract { background: #00695C; color: white; }
+
+.rightclick-hint,
+.focus-hint,
+.clear-hint,
+.scrolltoelement-hint,
+.drag-hint,
+.mousewheel-hint,
+.log-hint,
+.hideelement-hint,
+.jsonextract-hint {
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 5px;
+  margin-top: 4px;
+}
+
+.rightclick-hint { border-left: 3px solid #D32F2F; }
+.focus-hint { border-left: 3px solid #1976D2; }
+.clear-hint { border-left: 3px solid #00838F; }
+.scrolltoelement-hint { border-left: 3px solid #0277BD; }
+.drag-hint { border-left: 3px solid #6A1B9A; }
+.mousewheel-hint { border-left: 3px solid #E65100; }
+.log-hint { border-left: 3px solid #33691E; }
+.hideelement-hint { border-left: 3px solid #455A64; }
+.jsonextract-hint { border-left: 3px solid #00695C; }

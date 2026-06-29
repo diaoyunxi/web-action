@@ -1,9 +1,10 @@
 /**
- * 网页操作执行器 - 内容脚本 v1.9.0
+ * 网页操作执行器 - 内容脚本 v2.0.0
  * 在目标页面中执行实际操作
  * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、剪贴板、
- *       HTTP请求、标签页、通知、Cookie、悬停、双击、条件判断、文件上传、
- *       变量设置、元素属性、本地存储、页面导航、媒体控制
+ *       HTTP请求、标签页、通知、Cookie、悬停、双击、右键点击、聚焦、清空、
+ *       滚动到元素、拖拽、鼠标滚轮、条件判断、文件上传、变量设置、元素属性、
+ *       本地存储、页面导航、媒体控制、打印日志、隐藏元素、JSON提取
  */
 
 // 用于条件判断操作：抛出该错误将跳过当前循环迭代的剩余操作
@@ -359,6 +360,15 @@ class OperationExecutor {
       case 'storage': await this.executeStorage(operation); break;
       case 'navigate': await this.executeNavigate(operation); break;
       case 'mediaControl': await this.executeMediaControl(operation); break;
+      case 'rightClick': await this.executeRightClick(operation); break;
+      case 'focus': await this.executeFocus(operation); break;
+      case 'clear': await this.executeClear(operation); break;
+      case 'scrollToElement': await this.executeScrollToElement(operation); break;
+      case 'drag': await this.executeDrag(operation); break;
+      case 'mouseWheel': await this.executeMouseWheel(operation); break;
+      case 'log': await this.executeLog(operation); break;
+      case 'hideElement': await this.executeHideElement(operation); break;
+      case 'jsonExtract': await this.executeJsonExtract(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -621,6 +631,18 @@ class OperationExecutor {
         const duration = delta > 0 ? minMs + Math.floor(Math.random() * (delta + 1)) : minMs;
         console.log(`⏳ 随机等待 ${duration} ms (范围 ${minMs}-${maxMs})`);
         await this.sleepWithStopCheck(duration);
+        break;
+      }
+
+      case 'elementText': {
+        if (!operation.waitSelector) {
+          throw new Error('等待元素文本操作缺少选择器');
+        }
+        const selector = this.substituteVariables(operation.waitSelector);
+        const expectedText = this.substituteVariables(operation.waitExpectedText || '');
+        const matchMode = operation.waitTextMatchMode || 'contains';
+        const timeout = parseInt(operation.waitTimeout) || 10000;
+        await this.waitForElementText(selector, expectedText, matchMode, timeout);
         break;
       }
 
@@ -1592,6 +1614,440 @@ class OperationExecutor {
     this.highlightElement(mediaElement, '#7C4DFF');
   }
 
+  // ==================== 右键点击操作 ====================
+
+  async executeRightClick(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(300);
+
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    const opts = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: centerX,
+      clientY: centerY,
+      screenX: centerX + window.screenX,
+      screenY: centerY + window.screenY,
+      button: 2
+    };
+
+    element.dispatchEvent(new MouseEvent('mouseover', { ...opts, button: 0 }));
+    element.dispatchEvent(new MouseEvent('mousedown', opts));
+    element.dispatchEvent(new MouseEvent('mouseup', opts));
+    element.dispatchEvent(new MouseEvent('contextmenu', opts));
+
+    // 尝试触发元素的 oncontextmenu 处理器
+    if (typeof element.oncontextmenu === 'function') {
+      try { element.oncontextmenu(new MouseEvent('contextmenu', opts)); } catch (e) { /* ignore */ }
+    }
+
+    this.highlightElement(element, '#D32F2F');
+    console.log(`🖱 右键点击: ${operation.selector}`);
+  }
+
+  // ==================== 元素聚焦操作 ====================
+
+  async executeFocus(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(200);
+
+    try {
+      element.focus({ preventScroll: true });
+    } catch (e) {
+      element.focus();
+    }
+
+    element.dispatchEvent(new Event('focus', { bubbles: true, cancelable: true }));
+    element.dispatchEvent(new Event('focusin', { bubbles: true, cancelable: true }));
+
+    this.highlightElement(element, '#1976D2');
+    console.log(`🎯 元素聚焦: ${operation.selector}`);
+  }
+
+  // ==================== 清空输入操作 ====================
+
+  async executeClear(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(200);
+
+    element.focus();
+
+    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value'
+      )?.set || Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype, 'value'
+      )?.set;
+
+      if (nativeSetter) {
+        nativeSetter.call(element, '');
+      } else {
+        element.value = '';
+      }
+    } else if (element.isContentEditable) {
+      element.textContent = '';
+    } else {
+      element.value = '';
+    }
+
+    ['input', 'change'].forEach(eventType => {
+      element.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
+    });
+
+    this.highlightElement(element, '#00BCD4');
+    console.log(`🧹 清空输入: ${operation.selector}`);
+  }
+
+  // ==================== 滚动到元素操作 ====================
+
+  async executeScrollToElement(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    const block = operation.scrollBlock || 'center';
+    const behavior = operation.scrollBehavior || 'smooth';
+
+    try {
+      element.scrollIntoView({ behavior, block });
+    } catch (e) {
+      element.scrollIntoView();
+    }
+
+    await this.sleep(behavior === 'smooth' ? 500 : 150);
+    this.highlightElement(element, '#00ACC1');
+    console.log(`📍 滚动到元素: ${operation.selector} (block=${block})`);
+  }
+
+  // ==================== 拖拽操作 ====================
+
+  async executeDrag(operation) {
+    const sourceSelector = this.substituteVariables(operation.dragSourceSelector || '');
+    const targetSelector = this.substituteVariables(operation.dragTargetSelector || '');
+    if (!sourceSelector) throw new Error('拖拽源元素选择器为空');
+    if (!targetSelector) throw new Error('拖拽目标元素选择器为空');
+
+    const sourceEl = this.findElement(sourceSelector);
+    if (!sourceEl) throw new Error(`未找到源元素: ${sourceSelector}`);
+
+    const targetEl = this.findElement(targetSelector);
+    if (!targetEl) throw new Error(`未找到目标元素: ${targetSelector}`);
+
+    sourceEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(300);
+
+    const sourceRect = sourceEl.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+
+    const sourceX = sourceRect.left + sourceRect.width / 2;
+    const sourceY = sourceRect.top + sourceRect.height / 2;
+    const targetX = targetRect.left + targetRect.width / 2;
+    const targetY = targetRect.top + targetRect.height / 2;
+
+    const mkOpts = (x, y, btn = 0) => ({
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      screenX: x + window.screenX,
+      screenY: y + window.screenY,
+      button: btn,
+      buttons: btn === 0 ? 0 : 1
+    });
+
+    // 1. 在源元素上按下鼠标
+    sourceEl.dispatchEvent(new MouseEvent('mouseover', mkOpts(sourceX, sourceY)));
+    sourceEl.dispatchEvent(new MouseEvent('mousedown', mkOpts(sourceX, sourceY, 0)));
+    sourceEl.dispatchEvent(new MouseEvent('mousedown', mkOpts(sourceX, sourceY, 1)));
+
+    // 2. 移动到目标元素（drag 事件）
+    const dragInit = new DragEvent('dragstart', {
+      bubbles: true, cancelable: true, view: window,
+      clientX: sourceX, clientY: sourceY, button: 0
+    });
+    try { sourceEl.dispatchEvent(dragInit); } catch (e) { /* ignore */ }
+
+    // 模拟拖动过程中的几次 mousemove
+    const steps = 5;
+    for (let i = 1; i <= steps; i++) {
+      const x = sourceX + (targetX - sourceX) * (i / steps);
+      const y = sourceY + (targetY - sourceY) * (i / steps);
+      document.dispatchEvent(new MouseEvent('mousemove', mkOpts(x, y, 1)));
+      try {
+        const dragEv = new DragEvent('drag', {
+          bubbles: true, cancelable: true, view: window,
+          clientX: x, clientY: y
+        });
+        sourceEl.dispatchEvent(dragEv);
+      } catch (e) { /* ignore */ }
+      await this.sleep(40);
+    }
+
+    // 3. 在目标元素上释放鼠标
+    targetEl.dispatchEvent(new MouseEvent('mousemove', mkOpts(targetX, targetY, 1)));
+    try {
+      const dragEnter = new DragEvent('dragenter', {
+        bubbles: true, cancelable: true, view: window,
+        clientX: targetX, clientY: targetY
+      });
+      targetEl.dispatchEvent(dragEnter);
+      const dragOver = new DragEvent('dragover', {
+        bubbles: true, cancelable: true, view: window,
+        clientX: targetX, clientY: targetY
+      });
+      targetEl.dispatchEvent(dragOver);
+      const drop = new DragEvent('drop', {
+        bubbles: true, cancelable: true, view: window,
+        clientX: targetX, clientY: targetY
+      });
+      targetEl.dispatchEvent(drop);
+    } catch (e) { /* ignore */ }
+
+    targetEl.dispatchEvent(new MouseEvent('mouseup', mkOpts(targetX, targetY, 1)));
+    targetEl.dispatchEvent(new MouseEvent('click', mkOpts(targetX, targetY, 0)));
+
+    try {
+      const dragEnd = new DragEvent('dragend', {
+        bubbles: true, cancelable: true, view: window,
+        clientX: targetX, clientY: targetY
+      });
+      sourceEl.dispatchEvent(dragEnd);
+    } catch (e) { /* ignore */ }
+
+    this.highlightElement(sourceEl, '#7B1FA2');
+    this.highlightElement(targetEl, '#388E3C');
+    console.log(`🤚 拖拽: ${sourceSelector} → ${targetSelector}`);
+  }
+
+  // ==================== 鼠标滚轮操作 ====================
+
+  async executeMouseWheel(operation) {
+    let element = null;
+    if (operation.selector) {
+      element = this.findElement(operation.selector);
+      if (!element) {
+        throw new Error(`未找到元素: ${operation.selector}`);
+      }
+    } else {
+      element = document.scrollingElement || document.documentElement;
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(200);
+
+    const deltaX = parseInt(operation.wheelDeltaX) || 0;
+    const deltaY = parseInt(operation.wheelDeltaY) || 0;
+    if (deltaX === 0 && deltaY === 0) {
+      throw new Error('滚轮增量不能同时为 0');
+    }
+
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    const wheelEvent = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: centerX,
+      clientY: centerY,
+      deltaX,
+      deltaY,
+      deltaMode: 0 // WheelEvent.DOM_DELTA_PIXEL
+    });
+
+    element.dispatchEvent(wheelEvent);
+
+    // 给浏览器一点时间处理滚动
+    await this.sleep(300);
+    this.highlightElement(element, '#F57C00');
+    console.log(`🎰 鼠标滚轮: deltaX=${deltaX}, deltaY=${deltaY} on ${operation.selector || 'window'}`);
+  }
+
+  // ==================== 打印日志操作 ====================
+
+  async executeLog(operation) {
+    const level = operation.logLevel || 'info';
+    const message = this.substituteVariables(operation.logMessage || '');
+
+    switch (level) {
+      case 'info':
+        console.log(`📜 [用户日志] ${message}`);
+        break;
+      case 'warn':
+        console.warn(`📜 [用户日志] ${message}`);
+        break;
+      case 'error':
+        console.error(`📜 [用户日志] ${message}`);
+        break;
+      case 'debug':
+        console.debug(`📜 [用户日志] ${message}`);
+        break;
+      default:
+        console.log(`📜 [用户日志] ${message}`);
+    }
+
+    // 同时发送到 popup 显示
+    chrome.runtime.sendMessage({
+      action: 'logMessage',
+      level,
+      message
+    });
+  }
+
+  // ==================== 隐藏/显示元素操作 ====================
+
+  async executeHideElement(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    const hideAction = operation.hideAction || 'hide';
+
+    // 记录原始样式以便恢复
+    if (!element.__executorOriginalStyle__) {
+      element.__executorOriginalStyle__ = {
+        display: element.style.display,
+        visibility: element.style.visibility,
+        opacity: element.style.opacity
+      };
+    }
+
+    switch (hideAction) {
+      case 'hide':
+        element.style.setProperty('display', 'none', 'important');
+        console.log(`🙈 隐藏元素: ${operation.selector}`);
+        break;
+      case 'show':
+        // 恢复原始样式
+        const orig = element.__executorOriginalStyle__;
+        if (orig) {
+          element.style.display = orig.display;
+          element.style.visibility = orig.visibility;
+          element.style.opacity = orig.opacity;
+        } else {
+          element.style.removeProperty('display');
+        }
+        console.log(`👀 显示元素: ${operation.selector}`);
+        break;
+      case 'toggle':
+        if (element.style.display === 'none') {
+          const orig = element.__executorOriginalStyle__;
+          if (orig) {
+            element.style.display = orig.display;
+          } else {
+            element.style.removeProperty('display');
+          }
+          console.log(`👀 切换显示元素: ${operation.selector}`);
+        } else {
+          element.style.setProperty('display', 'none', 'important');
+          console.log(`🙈 切换隐藏元素: ${operation.selector}`);
+        }
+        break;
+      default:
+        throw new Error(`未知隐藏操作: ${hideAction}`);
+    }
+
+    this.highlightElement(element, '#5C6BC0');
+  }
+
+  // ==================== JSON 提取操作 ====================
+
+  async executeJsonExtract(operation) {
+    const jsonSource = operation.jsonSource || 'variable';
+    const jsonPath = this.substituteVariables(operation.jsonPath || '');
+    const saveVariable = operation.jsonSaveVariable || '';
+
+    if (!jsonPath) {
+      throw new Error('JSON 路径为空');
+    }
+
+    let jsonStr = '';
+    switch (jsonSource) {
+      case 'variable': {
+        const varName = operation.jsonVariableName || '';
+        if (!varName) throw new Error('变量名为空');
+        jsonStr = this.variables ? String(this.variables[varName] ?? '') : '';
+        if (!jsonStr) throw new Error(`变量 ${varName} 不存在或为空`);
+        break;
+      }
+      case 'text': {
+        jsonStr = this.substituteVariables(operation.jsonText || '');
+        if (!jsonStr) throw new Error('JSON 文本为空');
+        break;
+      }
+      default:
+        throw new Error(`未知 JSON 来源: ${jsonSource}`);
+    }
+
+    let jsonObj;
+    try {
+      jsonObj = JSON.parse(jsonStr);
+    } catch (e) {
+      throw new Error(`JSON 解析失败: ${e.message}`);
+    }
+
+    // 支持简单路径语法: a.b.c 或 a[0].b 或 a/b/c
+    const normalizedPath = jsonPath.replace(/\//g, '.').replace(/\[(\d+)\]/g, '.$1');
+    const parts = normalizedPath.split('.').filter(p => p !== '');
+
+    let current = jsonObj;
+    for (const part of parts) {
+      if (current === null || current === undefined) {
+        throw new Error(`路径 ${jsonPath} 在 ${part} 处遇到 null/undefined`);
+      }
+      if (/^\d+$/.test(part)) {
+        current = current[parseInt(part, 10)];
+      } else {
+        current = current[part];
+      }
+    }
+
+    const resultStr = current === undefined || current === null
+      ? ''
+      : (typeof current === 'object' ? JSON.stringify(current) : String(current));
+
+    console.log(`🔧 JSON 提取: ${jsonPath} = ${resultStr.substring(0, 80)}`);
+
+    if (saveVariable) {
+      this.variables[saveVariable] = resultStr;
+      chrome.runtime.sendMessage({
+        action: 'storeData',
+        key: saveVariable,
+        value: resultStr
+      });
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'jsonExtractResult',
+      path: jsonPath,
+      value: resultStr,
+      variable: saveVariable
+    });
+  }
+
   // ==================== 辅助等待方法 ====================
 
   checkRefreshWait() {
@@ -1692,6 +2148,62 @@ class OperationExecutor {
 
         if (Date.now() - startTime > timeout) {
           reject(new Error(`等待元素消失超时 (${timeout}ms): ${selector}`));
+          return;
+        }
+
+        setTimeout(check, 200);
+      };
+
+      check();
+    });
+  }
+
+  // 等待元素文本符合指定条件
+  // matchMode: contains(包含) / equals(完全等于) / startsWith / endsWith / notContains(不包含)
+  async waitForElementText(selector, expectedText, matchMode = 'contains', timeout = 10000) {
+    const startTime = Date.now();
+
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        if (this.shouldStop) {
+          reject(new Error('用户停止执行'));
+          return;
+        }
+
+        const element = this.findElement(selector);
+        const actualText = element ? (element.textContent || '').trim() : '';
+
+        let matched = false;
+        if (element) {
+          switch (matchMode) {
+            case 'contains':
+              matched = actualText.includes(expectedText);
+              break;
+            case 'equals':
+              matched = actualText === expectedText;
+              break;
+            case 'startsWith':
+              matched = actualText.startsWith(expectedText);
+              break;
+            case 'endsWith':
+              matched = actualText.endsWith(expectedText);
+              break;
+            case 'notContains':
+              matched = !actualText.includes(expectedText);
+              break;
+            default:
+              matched = actualText.includes(expectedText);
+          }
+        }
+
+        if (matched) {
+          this.highlightElement(element, '#FF9800');
+          resolve(element);
+          return;
+        }
+
+        if (Date.now() - startTime > timeout) {
+          reject(new Error(`等待元素文本超时 (${timeout}ms): ${selector} (期望 ${matchMode} "${expectedText}")`));
           return;
         }
 

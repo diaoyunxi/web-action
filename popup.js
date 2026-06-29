@@ -1,7 +1,7 @@
 /**
- * 网页操作执行器 - 弹出窗口脚本 v1.9.0
- * 新增: 条件判断、文件上传、变量设置、元素属性、本地存储、页面导航、
- *       定时等待、随机等待、媒体控制
+ * 网页操作执行器 - 弹出窗口脚本 v2.0.0
+ * 新增: 右键点击、聚焦、清空、滚动到元素、拖拽、鼠标滚轮、等待元素文本、
+ *       打印日志、隐藏元素、JSON提取
  */
 
 class OperationManager {
@@ -147,6 +147,15 @@ class OperationManager {
     document.getElementById('addStorage').addEventListener('click', () => this.addOperation('storage'));
     document.getElementById('addNavigate').addEventListener('click', () => this.addOperation('navigate'));
     document.getElementById('addMediaControl').addEventListener('click', () => this.addOperation('mediaControl'));
+    document.getElementById('addRightClick').addEventListener('click', () => this.addOperation('rightClick'));
+    document.getElementById('addFocus').addEventListener('click', () => this.addOperation('focus'));
+    document.getElementById('addClear').addEventListener('click', () => this.addOperation('clear'));
+    document.getElementById('addScrollToElement').addEventListener('click', () => this.addOperation('scrollToElement'));
+    document.getElementById('addDrag').addEventListener('click', () => this.addOperation('drag'));
+    document.getElementById('addMouseWheel').addEventListener('click', () => this.addOperation('mouseWheel'));
+    document.getElementById('addLog').addEventListener('click', () => this.addOperation('log'));
+    document.getElementById('addHideElement').addEventListener('click', () => this.addOperation('hideElement'));
+    document.getElementById('addJsonExtract').addEventListener('click', () => this.addOperation('jsonExtract'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -220,6 +229,10 @@ class OperationManager {
         this.handleScriptResult(request);
       } else if (request.action === 'httpRequestResult') {
         this.handleHttpRequestResult(request);
+      } else if (request.action === 'logMessage') {
+        this.handleLogMessage(request);
+      } else if (request.action === 'jsonExtractResult') {
+        this.handleJsonExtractResult(request);
       }
     });
   }
@@ -324,6 +337,19 @@ class OperationManager {
     console.log(`HTTP请求结果: ${request.status}`, request.preview);
   }
 
+  handleLogMessage(request) {
+    const level = request.level || 'info';
+    const typeMap = { info: 'info', warn: 'warning', error: 'error', debug: 'info' };
+    this.addLog(typeMap[level] || 'info', `📜 ${request.message}`);
+    console.log(`用户日志 [${level}]:`, request.message);
+  }
+
+  handleJsonExtractResult(request) {
+    const valuePreview = (request.value || '').substring(0, 80);
+    this.addLog('success', `JSON 提取 ${request.path}: ${valuePreview}${(request.value || '').length > 80 ? '...' : ''}`);
+    console.log('JSON 提取结果:', request.value);
+  }
+
   // 【核心修复】确保 content script 已注入
   async ensureContentScriptInjected(tab) {
     try {
@@ -415,7 +441,16 @@ class OperationManager {
       setAttribute: { ...baseOperation, type: 'setAttribute', selector: '', attrAction: 'set', attrName: '', attrValue: '', description: '元素属性' },
       storage: { ...baseOperation, type: 'storage', storageType: 'localStorage', storageAction: 'get', storageKey: '', storageValue: '', storageVariable: '', description: '本地存储' },
       navigate: { ...baseOperation, type: 'navigate', navigateAction: 'url', navigateUrl: '', navigateWaitLoad: true, description: '页面导航' },
-      mediaControl: { ...baseOperation, type: 'mediaControl', selector: '', mediaAction: 'play', mediaVolume: '1', mediaSeekTime: '0', mediaPlaybackRate: '1', description: '媒体控制' }
+      mediaControl: { ...baseOperation, type: 'mediaControl', selector: '', mediaAction: 'play', mediaVolume: '1', mediaSeekTime: '0', mediaPlaybackRate: '1', description: '媒体控制' },
+      rightClick: { ...baseOperation, type: 'rightClick', selector: '', description: '右键点击' },
+      focus: { ...baseOperation, type: 'focus', selector: '', description: '元素聚焦' },
+      clear: { ...baseOperation, type: 'clear', selector: '', description: '清空输入' },
+      scrollToElement: { ...baseOperation, type: 'scrollToElement', selector: '', scrollBlock: 'center', scrollBehavior: 'smooth', description: '滚动到元素' },
+      drag: { ...baseOperation, type: 'drag', dragSourceSelector: '', dragTargetSelector: '', description: '拖拽元素' },
+      mouseWheel: { ...baseOperation, type: 'mouseWheel', selector: '', wheelDeltaX: 0, wheelDeltaY: -300, description: '鼠标滚轮' },
+      log: { ...baseOperation, type: 'log', logLevel: 'info', logMessage: '', description: '打印日志' },
+      hideElement: { ...baseOperation, type: 'hideElement', selector: '', hideAction: 'hide', description: '隐藏元素' },
+      jsonExtract: { ...baseOperation, type: 'jsonExtract', jsonSource: 'variable', jsonVariableName: '', jsonText: '', jsonPath: '', jsonSaveVariable: '', description: 'JSON提取' }
     };
 
     if (typeMap[type]) {
@@ -471,7 +506,7 @@ class OperationManager {
 
   exportConfig() {
     const config = {
-      version: '1.9.0',
+      version: '2.0.0',
       exportTime: new Date().toISOString(),
       operations: this.operations,
       repeatSettings: {
@@ -961,6 +996,7 @@ class OperationManager {
               <option value="elementDisappear" ${op.waitType === 'elementDisappear' ? 'selected' : ''}>等待元素消失</option>
               <option value="scheduledTime" ${op.waitType === 'scheduledTime' ? 'selected' : ''}>定时等待 (到指定时刻)</option>
               <option value="randomDelay" ${op.waitType === 'randomDelay' ? 'selected' : ''}>随机等待 (区间)</option>
+              <option value="elementText" ${op.waitType === 'elementText' ? 'selected' : ''}>等待元素文本 (内容匹配)</option>
             </select>
           </div>
           ${op.waitType === 'fixed' ? `
@@ -981,6 +1017,34 @@ class OperationManager {
               <input type="number" class="field-waitTimeoutOp" data-id="${op.id}" value="${op.waitTimeout || 10000}" min="100">
             </div>
           </div>` : ''}
+          ${op.waitType === 'elementText' ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`waitSelectorOp-${op.id}`)}</label>
+              <input type="text" class="field-waitSelectorOp" data-id="${op.id}" data-picker-target="waitSelectorOp-${op.id}" value="${this.escapeHtml(op.waitSelector || '')}" placeholder="#status">
+            </div>
+            <div class="field-group flex-1">
+              <label>匹配方式</label>
+              <select class="field-waitTextMatchMode" data-id="${op.id}">
+                <option value="contains" ${(op.waitTextMatchMode || 'contains') === 'contains' ? 'selected' : ''}>包含 (contains)</option>
+                <option value="equals" ${op.waitTextMatchMode === 'equals' ? 'selected' : ''}>完全等于 (equals)</option>
+                <option value="startsWith" ${op.waitTextMatchMode === 'startsWith' ? 'selected' : ''}>开头为 (startsWith)</option>
+                <option value="endsWith" ${op.waitTextMatchMode === 'endsWith' ? 'selected' : ''}>结尾为 (endsWith)</option>
+                <option value="notContains" ${op.waitTextMatchMode === 'notContains' ? 'selected' : ''}>不包含 (notContains)</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>期望文本 (支持变量)</label>
+              <input type="text" class="field-waitExpectedText" data-id="${op.id}" value="${this.escapeHtml(op.waitExpectedText || '')}" placeholder="成功 / done">
+            </div>
+            <div class="field-group flex-1">
+              <label>超时(ms)</label>
+              <input type="number" class="field-waitTimeoutOp" data-id="${op.id}" value="${op.waitTimeout || 10000}" min="100">
+            </div>
+          </div>
+          <div class="wait-hint">💡 等待元素文本满足匹配条件后继续；常用于等待状态文案出现，如「加载完成」「已支付」</div>` : ''}
           ${op.waitType === 'scheduledTime' ? `
           <div class="field-row">
             <div class="field-group flex-2">
@@ -1525,6 +1589,178 @@ class OperationManager {
           </div>` : ''}
           <div class="mediacontrol-hint">💡 控制 HTML5 &lt;video&gt;/&lt;audio&gt; 元素：播放、暂停、音量、跳转、速率、全屏等</div>`;
         break;
+
+      case 'rightClick':
+        fields = `
+          <div class="field-group">
+            <label>CSS选择器 ${pickerButton(`selector-${op.id}`)}</label>
+            <div class="input-with-picker">
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target, .item">
+            </div>
+          </div>
+          <div class="rightclick-hint">💡 右键点击会触发 contextmenu 事件，适用于自定义右键菜单、复制粘贴等场景</div>`;
+        break;
+
+      case 'focus':
+        fields = `
+          <div class="field-group">
+            <label>CSS选择器 ${pickerButton(`selector-${op.id}`)}</label>
+            <div class="input-with-picker">
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#input, textarea">
+            </div>
+          </div>
+          <div class="focus-hint">💡 聚焦元素会触发 focus/focusin 事件，适用于激活输入框、唤起键盘等场景</div>`;
+        break;
+
+      case 'clear':
+        fields = `
+          <div class="field-group">
+            <label>CSS选择器 ${pickerButton(`selector-${op.id}`)}</label>
+            <div class="input-with-picker">
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="input, textarea, [contenteditable]">
+            </div>
+          </div>
+          <div class="clear-hint">💡 清空输入框/文本域/可编辑元素的值，并触发 input/change 事件</div>`;
+        break;
+
+      case 'scrollToElement':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target">
+            </div>
+            <div class="field-group flex-1">
+              <label>对齐方式</label>
+              <select class="field-scrollBlock" data-id="${op.id}">
+                <option value="start" ${op.scrollBlock === 'start' ? 'selected' : ''}>顶部对齐</option>
+                <option value="center" ${(op.scrollBlock || 'center') === 'center' ? 'selected' : ''}>居中对齐</option>
+                <option value="end" ${op.scrollBlock === 'end' ? 'selected' : ''}>底部对齐</option>
+                <option value="nearest" ${op.scrollBlock === 'nearest' ? 'selected' : ''}>就近对齐</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>滚动行为</label>
+              <select class="field-scrollBehavior" data-id="${op.id}">
+                <option value="smooth" ${(op.scrollBehavior || 'smooth') === 'smooth' ? 'selected' : ''}>平滑滚动</option>
+                <option value="auto" ${op.scrollBehavior === 'auto' ? 'selected' : ''}>立即跳转</option>
+              </select>
+            </div>
+          </div>
+          <div class="scrolltoelement-hint">💡 将指定元素滚动到视口可见位置，常用于定位页面区块</div>`;
+        break;
+
+      case 'drag':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>源元素选择器 ${pickerButton(`dragSourceSelector-${op.id}`)}</label>
+              <input type="text" class="field-dragSourceSelector" data-id="${op.id}" data-picker-target="dragSourceSelector-${op.id}" value="${this.escapeHtml(op.dragSourceSelector || '')}" placeholder="#source">
+            </div>
+            <div class="field-group flex-2">
+              <label>目标元素选择器 ${pickerButton(`dragTargetSelector-${op.id}`)}</label>
+              <input type="text" class="field-dragTargetSelector" data-id="${op.id}" data-picker-target="dragTargetSelector-${op.id}" value="${this.escapeHtml(op.dragTargetSelector || '')}" placeholder="#target">
+            </div>
+          </div>
+          <div class="drag-hint">💡 模拟 HTML5 拖拽：mousedown → dragstart → mousemove → dragenter → dragover → drop → dragend</div>`;
+        break;
+
+      case 'mouseWheel':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="留空则对整个页面生效">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>水平增量 Δx (px)</label>
+              <input type="number" class="field-wheelDeltaX" data-id="${op.id}" value="${op.wheelDeltaX || 0}">
+            </div>
+            <div class="field-group flex-1">
+              <label>垂直增量 Δy (px)</label>
+              <input type="number" class="field-wheelDeltaY" data-id="${op.id}" value="${op.wheelDeltaY || -300}">
+            </div>
+          </div>
+          <div class="mousewheel-hint">💡 模拟鼠标滚轮事件；Δy 为负数向上滚（缩小），正数向下滚（放大）</div>`;
+        break;
+
+      case 'log':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>日志级别</label>
+              <select class="field-logLevel" data-id="${op.id}">
+                <option value="info" ${(op.logLevel || 'info') === 'info' ? 'selected' : ''}>info (信息)</option>
+                <option value="warn" ${op.logLevel === 'warn' ? 'selected' : ''}>warn (警告)</option>
+                <option value="error" ${op.logLevel === 'error' ? 'selected' : ''}>error (错误)</option>
+                <option value="debug" ${op.logLevel === 'debug' ? 'selected' : ''}>debug (调试)</option>
+              </select>
+            </div>
+            <div class="field-group flex-2">
+              <label>日志内容 (支持变量)</label>
+              <input type="text" class="field-logMessage" data-id="${op.id}" value="${this.escapeHtml(op.logMessage || '')}" placeholder="当前循环 {{loopIndex}}, 数据 {{var:myVar}}">
+            </div>
+          </div>
+          <div class="log-hint">💡 在执行日志中输出自定义消息，常用于调试与流程标记</div>`;
+        break;
+
+      case 'hideElement':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder=".popup, #modal">
+            </div>
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-hideAction" data-id="${op.id}">
+                <option value="hide" ${(op.hideAction || 'hide') === 'hide' ? 'selected' : ''}>隐藏</option>
+                <option value="show" ${op.hideAction === 'show' ? 'selected' : ''}>显示</option>
+                <option value="toggle" ${op.hideAction === 'toggle' ? 'selected' : ''}>切换</option>
+              </select>
+            </div>
+          </div>
+          <div class="hideelement-hint">💡 通过设置 display:none 强制隐藏/显示元素；常用于关闭弹窗、模态框、广告遮罩</div>`;
+        break;
+
+      case 'jsonExtract':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>JSON 来源</label>
+              <select class="field-jsonSource" data-id="${op.id}">
+                <option value="variable" ${(op.jsonSource || 'variable') === 'variable' ? 'selected' : ''}>从变量读取</option>
+                <option value="text" ${op.jsonSource === 'text' ? 'selected' : ''}>直接输入文本</option>
+              </select>
+            </div>
+          </div>
+          ${op.jsonSource === 'text' ? `
+          <div class="field-group">
+            <label>JSON 文本 (支持变量)</label>
+            <textarea class="field-jsonText" data-id="${op.id}" rows="3" placeholder='{"name":"test","age":18}'>${this.escapeHtml(op.jsonText || '')}</textarea>
+          </div>` : `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>变量名</label>
+              <input type="text" class="field-jsonVariableName" data-id="${op.id}" value="${this.escapeHtml(op.jsonVariableName || '')}" placeholder="responseData">
+            </div>
+          </div>`}
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>JSON 路径 (如 a.b.c 或 a[0].b 或 a/b/c)</label>
+              <input type="text" class="field-jsonPath" data-id="${op.id}" value="${this.escapeHtml(op.jsonPath || '')}" placeholder="data.user.name">
+            </div>
+            <div class="field-group flex-1">
+              <label>保存到变量</label>
+              <input type="text" class="field-jsonSaveVariable" data-id="${op.id}" value="${this.escapeHtml(op.jsonSaveVariable || '')}" placeholder="userName">
+            </div>
+          </div>
+          <div class="jsonextract-hint">💡 解析 JSON 字符串并按路径提取值；常用配合 HTTP 请求结果变量使用</div>`;
+        break;
     }
 
     fields += `
@@ -1593,7 +1829,17 @@ class OperationManager {
       'field-waitMaxDelay': 'waitMaxDelay',
       'field-mediaVolume': 'mediaVolume',
       'field-mediaSeekTime': 'mediaSeekTime',
-      'field-mediaPlaybackRate': 'mediaPlaybackRate'
+      'field-mediaPlaybackRate': 'mediaPlaybackRate',
+      'field-dragSourceSelector': 'dragSourceSelector',
+      'field-dragTargetSelector': 'dragTargetSelector',
+      'field-wheelDeltaX': 'wheelDeltaX',
+      'field-wheelDeltaY': 'wheelDeltaY',
+      'field-logMessage': 'logMessage',
+      'field-jsonVariableName': 'jsonVariableName',
+      'field-jsonText': 'jsonText',
+      'field-jsonPath': 'jsonPath',
+      'field-jsonSaveVariable': 'jsonSaveVariable',
+      'field-waitExpectedText': 'waitExpectedText'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -1601,7 +1847,7 @@ class OperationManager {
         input.addEventListener('change', (e) => {
           const id = parseInt(e.target.dataset.id);
           let val = e.target.value;
-          if (['field-position', 'field-delay', 'field-waitDuration', 'field-waitTimeout', 'field-waitTimeoutOp', 'field-hoverDuration', 'field-waitMinDelay', 'field-waitMaxDelay'].includes(cls)) {
+          if (['field-position', 'field-delay', 'field-waitDuration', 'field-waitTimeout', 'field-waitTimeoutOp', 'field-hoverDuration', 'field-waitMinDelay', 'field-waitMaxDelay', 'field-wheelDeltaX', 'field-wheelDeltaY'].includes(cls)) {
             val = parseInt(val) || 0;
           }
           this.updateOperation(id, prop, val);
@@ -1743,6 +1989,33 @@ class OperationManager {
       });
     });
 
+    document.querySelectorAll('.field-scrollBlock').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'scrollBlock', e.target.value));
+    });
+
+    document.querySelectorAll('.field-scrollBehavior').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'scrollBehavior', e.target.value));
+    });
+
+    document.querySelectorAll('.field-hideAction').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'hideAction', e.target.value));
+    });
+
+    document.querySelectorAll('.field-logLevel').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'logLevel', e.target.value));
+    });
+
+    document.querySelectorAll('.field-jsonSource').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'jsonSource', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-waitTextMatchMode').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'waitTextMatchMode', e.target.value));
+    });
+
     ['field-modCtrl', 'field-modShift', 'field-modAlt'].forEach(cls => {
       document.querySelectorAll(`.${cls}`).forEach(cb => {
         cb.addEventListener('change', (e) => {
@@ -1788,7 +2061,15 @@ class OperationManager {
   }
 
   getIcon(type) {
-    const icons = { input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳', select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷', clipboard: '📎', httpRequest: '🌐', tab: '🗂', notification: '🔔', cookie: '🍪', hover: '🖱', doubleClick: '👆👆', if: '🔀', fileUpload: '📁', setVariable: '📦', setAttribute: '🏷', storage: '🗄', navigate: '🧭', mediaControl: '🎬' };
+    const icons = {
+      input: '📝', click: '👆', scroll: '↕️', refresh: '🔄', wait: '⏳',
+      select: '📋', script: '⚡', extract: '🔍', keyboard: '⌨️', screenshot: '📷',
+      clipboard: '📎', httpRequest: '🌐', tab: '🗂', notification: '🔔', cookie: '🍪',
+      hover: '🖱', doubleClick: '👆👆', if: '🔀', fileUpload: '📁', setVariable: '📦',
+      setAttribute: '🏷', storage: '🗄', navigate: '🧭', mediaControl: '🎬',
+      rightClick: '🖱', focus: '🎯', clear: '🧹', scrollToElement: '📍',
+      drag: '🤚', mouseWheel: '🎰', log: '📜', hideElement: '🙈', jsonExtract: '🔧'
+    };
     return icons[type] || '❓';
   }
 
@@ -1822,14 +2103,14 @@ class OperationManager {
   }
 
   showHelp() {
-    alert(`📖 使用帮助 v1.9.0
+    alert(`📖 使用帮助 v2.0.0
 
 【操作类型】
 📝 输入       - 填写表单内容 (支持变量)
 👆 点击       - 点击任意元素
 ↕️ 滑动       - 滚动到指定位置
 🔄 刷新       - 重新加载页面
-⏳ 等待       - 固定时长 / 元素出现 / 元素消失 / 定时等待 / 随机等待
+⏳ 等待       - 固定/元素出现/可见/消失/定时/随机/元素文本
 📋 选择       - 操作下拉列表 (按值/索引/文本)
 ⚡ 脚本       - 执行自定义 JavaScript
 🔍 提取       - 获取元素文本/属性值
@@ -1849,6 +2130,15 @@ class OperationManager {
 🗄 本地存储   - 读写 localStorage/sessionStorage
 🧭 页面导航   - 跳转URL/后退/前进/重新加载
 🎬 媒体       - 播放/暂停/静音/音量/跳转/速率/全屏 (video/audio)
+🖱 右键点击   - 触发 contextmenu 事件
+🎯 元素聚焦   - focus 元素
+🧹 清空输入   - 清空输入框/文本域/可编辑元素
+📍 滚动到元素 - scrollIntoView 到指定元素
+🤚 拖拽       - 模拟 HTML5 拖拽
+🎰 鼠标滚轮   - 模拟 wheel 事件
+📜 打印日志   - 输出自定义日志
+🙈 隐藏元素   - 隐藏/显示/切换元素 (display:none)
+🔧 JSON提取  - 解析 JSON 并按路径提取值
 
 【等待操作详解】
 - 固定时长：等待 N 毫秒
@@ -1857,6 +2147,7 @@ class OperationManager {
   若该时刻今天已过则等到次日同时刻，毫秒级精度，适合定时抢购
 - 随机等待：在 [最小, 最大] 毫秒区间内随机等待，
   适合模拟人工操作节奏，避免被反爬识别
+- 等待元素文本：等待元素文本满足匹配条件 (包含/等于/开头/结尾/不包含)
 
 【媒体控制详解】
 控制 HTML5 媒体元素 (video/audio)
@@ -1867,6 +2158,11 @@ class OperationManager {
 - 设置播放速率 (>0，2 表示 2 倍速)
 - 进入全屏
 未指定选择器时自动取页面中第一个 video/audio 元素
+
+【JSON 提取详解】
+- 来源：从变量读取 / 直接输入 JSON 文本
+- 路径语法：a.b.c 或 a[0].b 或 a/b/c
+- 结果可保存到自定义变量供后续使用
 
 【元素拾取器】
 点击 🎯 按钮可进入拾取模式

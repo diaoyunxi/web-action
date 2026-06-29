@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-1.9.0-blue.svg)](https://github.com/diaoyunxi/web-action)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/diaoyunxi/web-action)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
@@ -57,6 +57,15 @@
 | **本地存储** | 🗄 | 读写 localStorage/sessionStorage | 站点数据管理 |
 | **页面导航** | 🧭 | 跳转URL/后退/前进/重新加载 | 多页面流程 |
 | **媒体控制** | 🎬 | 播放/暂停/音量/跳转/速率/全屏 | HTML5 媒体自动化 |
+| **右键点击** | 🖱 | 触发 contextmenu 事件 | 自定义右键菜单、复制粘贴 |
+| **元素聚焦** | 🎯 | focus 元素并触发 focus 事件 | 激活输入框、唤起键盘 |
+| **清空输入** | 🧹 | 清空 input/textarea/contenteditable | 重置表单 |
+| **滚动到元素** | 📍 | scrollIntoView 滚动到指定元素 | 定位页面区块 |
+| **拖拽** | 🤚 | 模拟 HTML5 拖拽源到目标 | 拖拽排序、拖拽上传 |
+| **鼠标滚轮** | 🎰 | 模拟 wheel 事件 (Δx/Δy) | 缩放、滚动特定容器 |
+| **打印日志** | 📜 | 输出自定义日志到执行日志 | 调试、流程标记 |
+| **隐藏元素** | 🙈 | 隐藏/显示/切换元素 (display:none) | 关闭弹窗、广告遮罩 |
+| **JSON 提取** | 🔧 | 解析 JSON 按路径提取值 | 处理 API 响应数据 |
 
 ### 🔄 重复执行模式
 
@@ -196,6 +205,40 @@ git clone https://github.com/diaoyunxi/web-action.git
 未指定选择器时自动取页面中第一个 video/audio 元素
 ```
 
+### 示例 7：HTTP + JSON 提取 + 等待元素文本（API 联动）
+
+```
+操作步骤：
+1. 🌐 HTTP → 方法: GET → URL: https://api.example.com/order/status?id=123
+                 → 保存响应到变量: apiResponse
+2. 🔧 JSON → 来源: 从变量读取 → 变量名: apiResponse
+                → 路径: data.status → 保存到变量: orderStatus
+3. 📜 日志 → 级别: info → 内容: 订单状态: {{var:orderStatus}}
+4. ⏳ 等待 → 等待类型: 等待元素文本
+              → 元素选择器: #order-status
+              → 匹配方式: 包含
+              → 期望文本: {{var:orderStatus}}
+              → 超时: 10000
+5. 🔔 通知 → 标题: 订单状态同步 → 内容: 当前状态 {{var:orderStatus}}
+
+执行：调用 API 获取订单状态 → 从 JSON 提取 status 字段 →
+     打印日志 → 等待页面元素显示对应状态文案 → 弹出系统通知
+```
+
+### 示例 8：拖拽 + 滚轮 + 隐藏弹窗（复杂交互自动化）
+
+```
+操作步骤：
+1. 🙈 隐藏元素 → 选择器: .cookie-banner → 操作类型: 隐藏
+2. 📍 滚动到元素 → 选择器: #drag-source-list → 对齐方式: 居中
+3. 🤚 拖拽 → 源元素: #item-3 → 目标元素: #drop-zone
+4. 🎰 鼠标滚轮 → 选择器: .canvas-container → Δy: -200 (向上滚动)
+5. 🖱 右键点击 → 选择器: #context-target
+
+执行：关闭 Cookie 横幅 → 滚动到拖拽源列表 →
+     将 item-3 拖拽到 drop-zone → 在画布上滚轮缩放 → 触发右键菜单
+```
+
 ---
 
 ## 📖 使用指南
@@ -204,7 +247,7 @@ git clone https://github.com/diaoyunxi/web-action.git
 
 ```
 ┌──────────────────────────────────────────┐
-│  🎯 网页操作执行器              v1.9.0  │
+│  🎯 网页操作执行器              v2.0.0  │
 ├──────────────────────────────────────────┤
 │  ┌────────────────────────────────────┐  │
 │  │ #1 📝 输入用户名                   │  │
@@ -644,6 +687,30 @@ chrome.storage.local.get(null, console.log)
 ---
 
 ## 📝 更新日志
+
+### v2.0.0 (2026-06-30)
+
+**新增（10 种新操作类型）**
+- ✨ 右键点击操作（type: `rightClick`）- 触发完整的 contextmenu 事件序列（mouseover/mousedown/mouseup/contextmenu），适用于自定义右键菜单、复制粘贴等场景
+- ✨ 元素聚焦操作（type: `focus`）- 调用 element.focus() 并触发 focus/focusin 事件，适用于激活输入框、唤起键盘等场景
+- ✨ 清空输入操作（type: `clear`）- 清空 input/textarea/contenteditable 元素的值并触发 input/change 事件，使用原生 setter 兼容 React 受控组件
+- ✨ 滚动到元素操作（type: `scrollToElement`）- 调用 scrollIntoView 将指定元素滚动到视口可见位置，支持 start/center/end/nearest 对齐方式与 smooth/auto 滚动行为
+- ✨ 拖拽操作（type: `drag`）- 模拟 HTML5 完整拖拽事件序列：mousedown → dragstart → mousemove → dragenter → dragover → drop → dragend，适用于拖拽排序、拖拽上传等场景
+- ✨ 鼠标滚轮操作（type: `mouseWheel`）- 模拟 WheelEvent，支持 Δx/Δy 双轴增量，未指定选择器时作用于整个页面，适用于缩放、滚动特定容器
+- ✨ 打印日志操作（type: `log`）- 输出自定义日志到执行日志区域与浏览器 Console，支持 info/warn/error/debug 四种级别，支持变量替换
+- ✨ 隐藏元素操作（type: `hideElement`）- 通过 display:none 强制隐藏/显示/切换元素，自动记录原始样式以便恢复，常用于关闭弹窗、模态框、广告遮罩
+- ✨ JSON 提取操作（type: `jsonExtract`）- 解析 JSON 字符串并按路径提取值（支持 a.b.c、a[0].b、a/b/c 语法），可保存到自定义变量供后续使用，常配合 HTTP 请求结果使用
+- ✨ 等待元素文本操作（waitType: `elementText`）- 等待元素文本满足匹配条件后继续，支持 contains/equals/startsWith/endsWith/notContains 五种匹配模式，常用于等待状态文案出现（如「加载完成」「已支付」）
+
+**变更**
+- 📌 `manifest.json` 版本升至 2.0.0，描述补充新功能
+- 📌 `popup.html` 新增 10 个操作按钮、版本号升级
+- 🎨 `styles.css` 新增 v2.0.0 操作类型样式（按钮、类型标签、提示框）
+- 📚 README 新增 10 种操作说明、新增 v2.0.0 更新日志
+- 🔧 `popup.js` showHelp 文档同步更新所有新操作说明
+- 🔧 `popup.js` exportConfig 版本号同步升级至 2.0.0
+
+**操作类型总数：34 种**（v1.9.0 的 24 种 + v2.0.0 新增 10 种）
 
 ### v1.9.0 (2026-06-29)
 
