@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/diaoyunxi/web-action)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/diaoyunxi/web-action)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
@@ -66,6 +66,12 @@
 | **打印日志** | 📜 | 输出自定义日志到执行日志 | 调试、流程标记 |
 | **隐藏元素** | 🙈 | 隐藏/显示/切换元素 (display:none) | 关闭弹窗、广告遮罩 |
 | **JSON 提取** | 🔧 | 解析 JSON 按路径提取值 | 处理 API 响应数据 |
+| **切换 iframe** | 🖼 | 进入/退出/回到主文档 | 操作 iframe 内部元素 |
+| **元素计数** | 🔢 | 统计匹配元素数量到变量 | 批量循环控制 |
+| **文件下载** | ⬇ | 通过 URL 触发浏览器下载 | 自动化下载文件 |
+| **页面信息** | 📄 | 获取 URL/标题/域名/UA 到变量 | 流程数据采集 |
+| **元素样式** | 🎨 | 设置/获取/移除元素 CSS 样式 | 动态样式控制 |
+| **触发事件** | 🎉 | 触发任意 DOM 事件 (含自定义事件) | 框架事件触发 |
 
 ### 🔄 重复执行模式
 
@@ -239,6 +245,64 @@ git clone https://github.com/diaoyunxi/web-action.git
      将 item-3 拖拽到 drop-zone → 在画布上滚轮缩放 → 触发右键菜单
 ```
 
+### 示例 9：切换 iframe + 操作 iframe 内元素（嵌套页面自动化）
+
+```
+操作步骤：
+1. 🖼 切换iframe → 操作: 进入 → 选择器: iframe#editor-frame
+2. 📝 输入 → 选择器: #content → 内容: 在 iframe 中输入文本
+3. 👆 点击 → 选择器: #save-btn (iframe 内的保存按钮)
+4. 🖼 切换iframe → 操作: 回到主文档
+
+执行：进入编辑器 iframe → 在 iframe 内输入并点击保存 → 退出回到主文档继续后续操作
+注意：跨域 iframe 受浏览器安全策略限制无法访问
+```
+
+### 示例 10：元素计数 + 条件循环（批量列表处理）
+
+```
+操作步骤：
+1. 🔢 元素计数 → 选择器: .todo-item → 保存到变量: itemCount
+2. 📜 日志 → 内容: 待办事项数量: {{var:itemCount}}
+3. 🔀 条件判断 → 条件类型: 变量等于 → 变量名: itemCount → 期望值: 0
+                  → 模式: 条件满足时跳过 (pass)
+4. 👆 点击 → 选择器: .load-more (有事项时点击加载更多)
+
+重复设置：指定次数 3 次 → 间隔 2 秒
+
+执行：每次循环先统计待办数量 → 打印日志 → 若已无待办则跳过本次循环 → 否则点击加载更多
+```
+
+### 示例 11：HTTP 请求 + 页面信息 + 文件下载（API 联动下载）
+
+```
+操作步骤：
+1. 📄 页面信息 → 信息类型: url → 保存到变量: currentUrl
+2. 🌐 HTTP → 方法: POST → URL: https://api.example.com/export
+                 → 请求体: {"source": "{{var:currentUrl}}"}
+                 → 保存响应到变量: exportResult
+3. 🔧 JSON → 来源: 从变量读取 → 变量名: exportResult
+                → 路径: data.downloadUrl → 保存到变量: downloadUrl
+4. ⬇ 文件下载 → 文件URL: {{var:downloadUrl}} → 保存文件名: export-{{date}}.xlsx
+
+执行：获取当前页面 URL → 调用导出 API → 从响应提取下载链接 → 触发文件下载
+```
+
+### 示例 12：元素样式 + 触发事件（动态样式与自定义事件）
+
+```
+操作步骤：
+1. 🎨 元素样式 → 选择器: #target-box → 操作: 设置 → 属性名: background-color → 属性值: #ffeb3b
+2. 🎨 元素样式 → 选择器: #target-box → 操作: 设置 → 属性名: border → 属性值: 2px solid #f44336
+3. 🎨 元素样式 → 选择器: #target-box → 操作: 获取 → 属性名: width → 保存到变量: boxWidth
+4. 📜 日志 → 内容: 目标宽度: {{var:boxWidth}}
+5. 🎉 触发事件 → 选择器: #target-box → 事件类型: custom-highlight
+                  → 初始化参数: {"detail": {"width": "{{var:boxWidth}}"}}
+6. 🎉 触发事件 → 选择器: form#search → 事件类型: submit
+
+执行：动态修改元素样式 → 获取计算宽度 → 触发自定义事件通知框架 → 触发表单提交
+```
+
 ---
 
 ## 📖 使用指南
@@ -247,7 +311,7 @@ git clone https://github.com/diaoyunxi/web-action.git
 
 ```
 ┌──────────────────────────────────────────┐
-│  🎯 网页操作执行器              v2.0.0  │
+│  🎯 网页操作执行器              v2.1.0  │
 ├──────────────────────────────────────────┤
 │  ┌────────────────────────────────────┐  │
 │  │ #1 📝 输入用户名                   │  │
@@ -687,6 +751,27 @@ chrome.storage.local.get(null, console.log)
 ---
 
 ## 📝 更新日志
+
+### v2.1.0 (2026-07-01)
+
+**新增（6 种新操作类型）**
+- ✨ 切换 iframe 操作（type: `switchIframe`）- 在主文档与 iframe 文档之间切换元素查找上下文。支持三种模式：`enter`（通过选择器进入指定 iframe）、`exit`（退出到父级文档）、`main`（回到最顶层主文档）。进入 iframe 后，后续输入/点击/提取等操作的元素查找都会在该 iframe 内进行，操作完成后用「退出」或「回到主文档」恢复。注意：跨域 iframe 因浏览器安全策略无法访问
+- ✨ 元素计数操作（type: `elementCount`）- 统计匹配选择器的元素数量并保存到自定义变量，支持 CSS 选择器和 XPath。常配合条件判断（`variableEquals`/`variableNotEmpty`）实现基于数量的循环控制
+- ✨ 文件下载操作（type: `fileDownload`）- 通过创建 `<a download>` 元素触发浏览器下载，支持指定保存文件名。同源 URL 可指定文件名，跨域 URL 浏览器可能使用原文件名
+- ✨ 页面信息操作（type: `pageInfo`）- 获取页面或浏览器的元信息到变量，支持 10 种信息类型：`url`/`title`/`referrer`/`domain`/`hostname`/`pathname`/`search`/`hash`/`userAgent`/`language`
+- ✨ 元素样式操作（type: `elementStyle`）- 设置/获取/移除元素 CSS 样式。设置使用 `setProperty`，获取使用 `getComputedStyle`（可保存到变量），移除使用 `removeProperty`。属性名使用 CSS 连字符格式（如 `background-color`）
+- ✨ 触发事件操作（type: `triggerEvent`）- 触发任意 DOM 事件，自动识别事件类型并构造合适的事件对象：Mouse 事件（click/mousedown/dblclick 等）、Keyboard 事件（keydown/keyup/keypress）、Drag 事件（dragstart/drop 等）、Wheel 事件、基础事件（input/change/submit/focus/blur/load 等），未知类型使用 `CustomEvent` 触发（可携带 `detail` 数据）。支持 JSON 格式的事件初始化参数
+
+**变更**
+- 📌 `manifest.json` 版本升至 2.1.0，描述补充新功能
+- 📌 `popup.html` 新增 6 个操作按钮、版本号升级
+- 🎨 `styles.css` 新增 v2.1.0 操作类型样式（按钮、类型标签、提示框）
+- 📚 README 新增 6 种操作说明、4 个使用示例、v2.1.0 更新日志
+- 🔧 `popup.js` showHelp 文档同步更新所有新操作说明
+- 🔧 `popup.js` exportConfig 版本号同步升级至 2.1.0
+- 🔧 `content.js` 新增 `currentDocument` 属性，`findElement` 支持在 iframe 文档上下文中查找元素
+
+**操作类型总数：40 种**（v2.0.0 的 34 种 + v2.1.0 新增 6 种）
 
 ### v2.0.0 (2026-06-30)
 

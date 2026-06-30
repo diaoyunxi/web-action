@@ -1,10 +1,11 @@
 /**
- * 网页操作执行器 - 内容脚本 v2.0.0
+ * 网页操作执行器 - 内容脚本 v2.1.0
  * 在目标页面中执行实际操作
  * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、剪贴板、
  *       HTTP请求、标签页、通知、Cookie、悬停、双击、右键点击、聚焦、清空、
  *       滚动到元素、拖拽、鼠标滚轮、条件判断、文件上传、变量设置、元素属性、
- *       本地存储、页面导航、媒体控制、打印日志、隐藏元素、JSON提取
+ *       本地存储、页面导航、媒体控制、打印日志、隐藏元素、JSON提取、
+ *       切换iframe、元素计数、文件下载、页面信息、元素样式、触发事件
  */
 
 // 用于条件判断操作：抛出该错误将跳过当前循环迭代的剩余操作
@@ -23,6 +24,7 @@ class OperationExecutor {
     this.pickerMode = false;
     this.pickerCallback = null;
     this.variables = {}; // 自定义变量存储（由 setVariable 操作维护）
+    this.currentDocument = document; // 当前查找元素的文档上下文（由 switchIframe 操作维护）
     this.initMessageListener();
     this.checkRefreshWait();
     this.loadStoredVariables();
@@ -369,6 +371,12 @@ class OperationExecutor {
       case 'log': await this.executeLog(operation); break;
       case 'hideElement': await this.executeHideElement(operation); break;
       case 'jsonExtract': await this.executeJsonExtract(operation); break;
+      case 'switchIframe': await this.executeSwitchIframe(operation); break;
+      case 'elementCount': await this.executeElementCount(operation); break;
+      case 'fileDownload': await this.executeFileDownload(operation); break;
+      case 'pageInfo': await this.executePageInfo(operation); break;
+      case 'elementStyle': await this.executeElementStyle(operation); break;
+      case 'triggerEvent': await this.executeTriggerEvent(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -2048,6 +2056,324 @@ class OperationExecutor {
     });
   }
 
+  // ==================== 切换 iframe 操作 ====================
+
+  async executeSwitchIframe(operation) {
+    const iframeAction = operation.iframeAction || 'enter';
+
+    switch (iframeAction) {
+      case 'enter': {
+        const selector = this.substituteVariables(operation.selector || '');
+        if (!selector) {
+          throw new Error('进入 iframe 缺少选择器');
+        }
+        // 在当前文档上下文中查找 iframe 元素
+        const doc = this.currentDocument || document;
+        const iframe = doc.querySelector(selector);
+        if (!iframe) {
+          throw new Error(`未找到 iframe 元素: ${selector}`);
+        }
+        if (iframe.tagName !== 'IFRAME') {
+          throw new Error(`目标元素不是 iframe: <${iframe.tagName.toLowerCase()}>`);
+        }
+        let iframeDoc = null;
+        try {
+          iframeDoc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+        } catch (e) {
+          throw new Error(`无法访问 iframe 文档（可能是跨域限制）: ${e.message}`);
+        }
+        if (!iframeDoc) {
+          throw new Error('无法访问 iframe 文档（可能是跨域限制或 iframe 尚未加载）');
+        }
+        this.currentDocument = iframeDoc;
+        console.log(`🖼 进入 iframe: ${selector}`);
+        break;
+      }
+      case 'exit': {
+        // 退出到父级文档
+        try {
+          if (window.parent && window.parent.document && window.parent.document !== this.currentDocument) {
+            this.currentDocument = window.parent.document;
+            console.log('🖼 退出到父级文档');
+          } else {
+            this.currentDocument = document;
+            console.log('🖼 已在主文档，无需退出');
+          }
+        } catch (e) {
+          this.currentDocument = document;
+          console.log('🖼 跨域无法访问父文档，回到主文档');
+        }
+        break;
+      }
+      case 'main': {
+        this.currentDocument = document;
+        console.log('🖼 回到主文档');
+        break;
+      }
+      default:
+        throw new Error(`未知 iframe 操作: ${iframeAction}`);
+    }
+  }
+
+  // ==================== 元素计数操作 ====================
+
+  async executeElementCount(operation) {
+    const doc = this.currentDocument || document;
+    const selector = this.substituteVariables(operation.selector || '');
+    if (!selector) {
+      throw new Error('元素计数操作缺少选择器');
+    }
+
+    let count = 0;
+    try {
+      count = doc.querySelectorAll(selector).length;
+    } catch (error) {
+      // 可能是 XPath
+      try {
+        const xpathResult = doc.evaluate(
+          selector, doc, null,
+          XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null
+        );
+        count = xpathResult.snapshotLength;
+      } catch (e) {
+        throw new Error(`选择器无效: ${error.message}`);
+      }
+    }
+
+    const varName = operation.countVariable || '';
+    console.log(`🔢 元素计数: ${selector} = ${count}`);
+
+    if (varName) {
+      this.variables[varName] = String(count);
+      chrome.runtime.sendMessage({
+        action: 'storeData',
+        key: varName,
+        value: String(count)
+      });
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'elementCountResult',
+      selector,
+      count,
+      variable: varName
+    });
+  }
+
+  // ==================== 文件下载操作 ====================
+
+  async executeFileDownload(operation) {
+    const url = this.substituteVariables(operation.downloadUrl || '');
+    const filename = this.substituteVariables(operation.downloadFilename || '') || '';
+    if (!url) {
+      throw new Error('文件下载URL为空');
+    }
+
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      if (filename) {
+        a.download = filename;
+      } else {
+        // 不设置 download 属性，让浏览器使用默认行为
+        a.removeAttribute('download');
+      }
+      // 防止 download 属性被忽略 (跨域时浏览器可能直接导航)
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      // 给浏览器一点时间发起下载
+      await this.sleep(300);
+      document.body.removeChild(a);
+
+      console.log(`⬇ 触发文件下载: ${url}${filename ? ` → ${filename}` : ''}`);
+    } catch (error) {
+      throw new Error(`文件下载失败: ${error.message}`);
+    }
+  }
+
+  // ==================== 页面信息操作 ====================
+
+  async executePageInfo(operation) {
+    const infoType = operation.infoType || 'url';
+    const varName = operation.infoVariable || '';
+    if (!varName) {
+      throw new Error('页面信息操作缺少保存变量名');
+    }
+
+    let value = '';
+    switch (infoType) {
+      case 'url':
+        value = window.location.href || '';
+        break;
+      case 'title':
+        value = document.title || '';
+        break;
+      case 'referrer':
+        value = document.referrer || '';
+        break;
+      case 'domain':
+        value = document.domain || window.location.hostname || '';
+        break;
+      case 'hostname':
+        value = window.location.hostname || '';
+        break;
+      case 'pathname':
+        value = window.location.pathname || '';
+        break;
+      case 'search':
+        value = window.location.search || '';
+        break;
+      case 'hash':
+        value = window.location.hash || '';
+        break;
+      case 'userAgent':
+        value = navigator.userAgent || '';
+        break;
+      case 'language':
+        value = navigator.language || '';
+        break;
+      default:
+        throw new Error(`未知页面信息类型: ${infoType}`);
+    }
+
+    console.log(`📄 页面信息 [${infoType}]: ${value.substring(0, 80)}`);
+
+    this.variables[varName] = value;
+    chrome.runtime.sendMessage({
+      action: 'storeData',
+      key: varName,
+      value
+    });
+
+    chrome.runtime.sendMessage({
+      action: 'pageInfoResult',
+      infoType,
+      value,
+      variable: varName
+    });
+  }
+
+  // ==================== 元素样式操作 ====================
+
+  async executeElementStyle(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await this.sleep(150);
+
+    const styleAction = operation.styleAction || 'set';
+    const propName = this.substituteVariables(operation.stylePropertyName || '');
+    if (!propName) {
+      throw new Error('CSS属性名为空');
+    }
+
+    switch (styleAction) {
+      case 'set': {
+        const propValue = this.substituteVariables(operation.stylePropertyValue || '');
+        element.style.setProperty(propName, propValue);
+        console.log(`🎨 设置样式: ${propName}="${propValue}"`);
+        break;
+      }
+      case 'get': {
+        const computed = window.getComputedStyle(element).getPropertyValue(propName) || '';
+        console.log(`🎨 获取样式: ${propName}="${computed}"`);
+        const varName = operation.styleVariable || '';
+        if (varName) {
+          this.variables[varName] = computed;
+          chrome.runtime.sendMessage({
+            action: 'storeData',
+            key: varName,
+            value: computed
+          });
+        }
+        chrome.runtime.sendMessage({
+          action: 'elementStyleResult',
+          propertyName: propName,
+          value: computed,
+          variable: varName
+        });
+        break;
+      }
+      case 'remove': {
+        element.style.removeProperty(propName);
+        console.log(`🎨 移除样式: ${propName}`);
+        break;
+      }
+      default:
+        throw new Error(`未知样式操作: ${styleAction}`);
+    }
+
+    this.highlightElement(element, '#00838F');
+  }
+
+  // ==================== 触发事件操作 ====================
+
+  async executeTriggerEvent(operation) {
+    const element = operation.selector ? this.findElement(operation.selector) : document;
+    if (operation.selector && !element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    const eventType = this.substituteVariables(operation.eventType || '');
+    if (!eventType) {
+      throw new Error('事件类型为空');
+    }
+
+    const bubbles = operation.eventBubbles !== false;
+    const cancelable = operation.eventCancelable !== false;
+
+    // 解析事件初始化参数 (JSON 字符串)
+    let eventInit = { bubbles, cancelable };
+    if (operation.eventInit) {
+      try {
+        const parsed = JSON.parse(this.substituteVariables(operation.eventInit));
+        eventInit = { ...eventInit, ...parsed };
+      } catch (e) {
+        throw new Error(`事件初始化参数 JSON 解析失败: ${e.message}`);
+      }
+    }
+
+    let event;
+    const lowerType = eventType.toLowerCase();
+
+    // 根据事件类型构造合适的事件对象
+    if (['click', 'mousedown', 'mouseup', 'mouseover', 'mouseout', 'mouseenter', 'mouseleave', 'dblclick', 'mousemove', 'contextmenu'].includes(lowerType)) {
+      event = new MouseEvent(eventType, eventInit);
+    } else if (['keydown', 'keyup', 'keypress'].includes(lowerType)) {
+      event = new KeyboardEvent(eventType, eventInit);
+    } else if (['input', 'change', 'submit', 'reset', 'focus', 'blur', 'load', 'error', 'scroll', 'resize'].includes(lowerType)) {
+      event = new Event(eventType, eventInit);
+    } else if (lowerType.startsWith('wheel')) {
+      event = new WheelEvent(eventType, eventInit);
+    } else if (lowerType === 'dragstart' || lowerType === 'drag' || lowerType === 'dragend' ||
+               lowerType === 'dragenter' || lowerType === 'dragover' || lowerType === 'dragleave' || lowerType === 'drop') {
+      try {
+        event = new DragEvent(eventType, eventInit);
+      } catch (e) {
+        event = new Event(eventType, eventInit);
+      }
+    } else {
+      // 自定义事件或未知事件类型，使用 CustomEvent
+      try {
+        event = new CustomEvent(eventType, eventInit);
+      } catch (e) {
+        event = new Event(eventType, eventInit);
+      }
+    }
+
+    const target = element || document;
+    target.dispatchEvent(event);
+
+    if (operation.selector) {
+      this.highlightElement(element, '#AD1457');
+    }
+    console.log(`🎉 触发事件: ${eventType} on ${operation.selector || 'document'}`);
+  }
+
   // ==================== 辅助等待方法 ====================
 
   checkRefreshWait() {
@@ -2234,14 +2560,16 @@ class OperationExecutor {
   // ==================== 工具方法 ====================
 
   findElement(selector) {
-    if (!selector) return document.body;
+    const doc = this.currentDocument || document;
+
+    if (!selector) return doc.body;
 
     try {
-      let element = document.querySelector(selector);
+      let element = doc.querySelector(selector);
       if (element) return element;
 
-      const xpathResult = document.evaluate(
-        selector, document, null,
+      const xpathResult = doc.evaluate(
+        selector, doc, null,
         XPathResult.FIRST_ORDERED_NODE_TYPE, null
       );
       element = xpathResult.singleNodeValue;

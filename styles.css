@@ -835,6 +835,22 @@ body {
 .btn-hideelement { background: #455A64; color: white; }
 .btn-jsonextract { background: #00695C; color: white; }
 
+/* v2.1.0 新增操作按钮样式 */
+.btn-switchiframe { background: #5E35B1; color: white; }
+.btn-elementcount { background: #2E7D32; color: white; }
+.btn-filedownload { background: #0277BD; color: white; }
+.btn-pageinfo { background: #5D4037; color: white; }
+.btn-elementstyle { background: #00838F; color: white; }
+.btn-triggerevent { background: #AD1457; color: white; }
+
+/* v2.1.0 新增操作类型标签样式 */
+.type-switchIframe { background: #EDE7F6; color: #4527A0; }
+.type-elementCount { background: #E8F5E9; color: #2E7D32; }
+.type-fileDownload { background: #E1F5FE; color: #0277BD; }
+.type-pageInfo { background: #EFEBE9; color: #3E2723; }
+.type-elementStyle { background: #E0F7FA; color: #00838F; }
+.type-triggerEvent { background: #FCE4EC; color: #AD1457; }
+
 .rightclick-hint,
 .focus-hint,
 .clear-hint,
@@ -843,7 +859,13 @@ body {
 .mousewheel-hint,
 .log-hint,
 .hideelement-hint,
-.jsonextract-hint {
+.jsonextract-hint,
+.switchiframe-hint,
+.elementcount-hint,
+.filedownload-hint,
+.pageinfo-hint,
+.elementstyle-hint,
+.triggerevent-hint {
   font-size: 11px;
   color: #666;
   background: #f5f5f5;
@@ -861,3 +883,9 @@ body {
 .log-hint { border-left: 3px solid #33691E; }
 .hideelement-hint { border-left: 3px solid #455A64; }
 .jsonextract-hint { border-left: 3px solid #00695C; }
+.switchiframe-hint { border-left: 3px solid #5E35B1; }
+.elementcount-hint { border-left: 3px solid #2E7D32; }
+.filedownload-hint { border-left: 3px solid #0277BD; }
+.pageinfo-hint { border-left: 3px solid #5D4037; }
+.elementstyle-hint { border-left: 3px solid #00838F; }
+.triggerevent-hint { border-left: 3px solid #AD1457; }

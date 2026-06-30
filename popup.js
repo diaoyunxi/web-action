@@ -1,7 +1,6 @@
 /**
- * 网页操作执行器 - 弹出窗口脚本 v2.0.0
- * 新增: 右键点击、聚焦、清空、滚动到元素、拖拽、鼠标滚轮、等待元素文本、
- *       打印日志、隐藏元素、JSON提取
+ * 网页操作执行器 - 弹出窗口脚本 v2.1.0
+ * 新增: 切换iframe、元素计数、文件下载、页面信息、元素样式、触发事件
  */
 
 class OperationManager {
@@ -156,6 +155,12 @@ class OperationManager {
     document.getElementById('addLog').addEventListener('click', () => this.addOperation('log'));
     document.getElementById('addHideElement').addEventListener('click', () => this.addOperation('hideElement'));
     document.getElementById('addJsonExtract').addEventListener('click', () => this.addOperation('jsonExtract'));
+    document.getElementById('addSwitchIframe').addEventListener('click', () => this.addOperation('switchIframe'));
+    document.getElementById('addElementCount').addEventListener('click', () => this.addOperation('elementCount'));
+    document.getElementById('addFileDownload').addEventListener('click', () => this.addOperation('fileDownload'));
+    document.getElementById('addPageInfo').addEventListener('click', () => this.addOperation('pageInfo'));
+    document.getElementById('addElementStyle').addEventListener('click', () => this.addOperation('elementStyle'));
+    document.getElementById('addTriggerEvent').addEventListener('click', () => this.addOperation('triggerEvent'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -233,6 +238,12 @@ class OperationManager {
         this.handleLogMessage(request);
       } else if (request.action === 'jsonExtractResult') {
         this.handleJsonExtractResult(request);
+      } else if (request.action === 'elementCountResult') {
+        this.handleElementCountResult(request);
+      } else if (request.action === 'pageInfoResult') {
+        this.handlePageInfoResult(request);
+      } else if (request.action === 'elementStyleResult') {
+        this.handleElementStyleResult(request);
       }
     });
   }
@@ -350,6 +361,22 @@ class OperationManager {
     console.log('JSON 提取结果:', request.value);
   }
 
+  handleElementCountResult(request) {
+    this.addLog('success', `🔢 元素计数 ${request.selector}: ${request.count}`);
+    console.log('元素计数结果:', request.count);
+  }
+
+  handlePageInfoResult(request) {
+    const valuePreview = (request.value || '').substring(0, 80);
+    this.addLog('info', `📄 页面信息 [${request.infoType}]: ${valuePreview}`);
+    console.log('页面信息结果:', request.value);
+  }
+
+  handleElementStyleResult(request) {
+    this.addLog('success', `🎨 样式 ${request.propertyName}="${request.value}"`);
+    console.log('元素样式结果:', request.value);
+  }
+
   // 【核心修复】确保 content script 已注入
   async ensureContentScriptInjected(tab) {
     try {
@@ -450,7 +477,13 @@ class OperationManager {
       mouseWheel: { ...baseOperation, type: 'mouseWheel', selector: '', wheelDeltaX: 0, wheelDeltaY: -300, description: '鼠标滚轮' },
       log: { ...baseOperation, type: 'log', logLevel: 'info', logMessage: '', description: '打印日志' },
       hideElement: { ...baseOperation, type: 'hideElement', selector: '', hideAction: 'hide', description: '隐藏元素' },
-      jsonExtract: { ...baseOperation, type: 'jsonExtract', jsonSource: 'variable', jsonVariableName: '', jsonText: '', jsonPath: '', jsonSaveVariable: '', description: 'JSON提取' }
+      jsonExtract: { ...baseOperation, type: 'jsonExtract', jsonSource: 'variable', jsonVariableName: '', jsonText: '', jsonPath: '', jsonSaveVariable: '', description: 'JSON提取' },
+      switchIframe: { ...baseOperation, type: 'switchIframe', selector: '', iframeAction: 'enter', description: '切换iframe' },
+      elementCount: { ...baseOperation, type: 'elementCount', selector: '', countVariable: '', description: '元素计数' },
+      fileDownload: { ...baseOperation, type: 'fileDownload', downloadUrl: '', downloadFilename: '', description: '文件下载' },
+      pageInfo: { ...baseOperation, type: 'pageInfo', infoType: 'url', infoVariable: '', description: '页面信息' },
+      elementStyle: { ...baseOperation, type: 'elementStyle', selector: '', styleAction: 'set', stylePropertyName: '', stylePropertyValue: '', styleVariable: '', description: '元素样式' },
+      triggerEvent: { ...baseOperation, type: 'triggerEvent', selector: '', eventType: '', eventBubbles: true, eventCancelable: true, eventInit: '', description: '触发事件' }
     };
 
     if (typeMap[type]) {
@@ -506,7 +539,7 @@ class OperationManager {
 
   exportConfig() {
     const config = {
-      version: '2.0.0',
+      version: '2.1.0',
       exportTime: new Date().toISOString(),
       operations: this.operations,
       repeatSettings: {
@@ -1761,6 +1794,154 @@ class OperationManager {
           </div>
           <div class="jsonextract-hint">💡 解析 JSON 字符串并按路径提取值；常用配合 HTTP 请求结果变量使用</div>`;
         break;
+
+      case 'switchIframe':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>iframe 操作</label>
+              <select class="field-iframeAction" data-id="${op.id}">
+                <option value="enter" ${(op.iframeAction || 'enter') === 'enter' ? 'selected' : ''}>进入 iframe (enter)</option>
+                <option value="exit" ${op.iframeAction === 'exit' ? 'selected' : ''}>退出到父级 (exit)</option>
+                <option value="main" ${op.iframeAction === 'main' ? 'selected' : ''}>回到主文档 (main)</option>
+              </select>
+            </div>
+          </div>
+          ${(op.iframeAction || 'enter') === 'enter' ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>iframe 选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="iframe#content, iframe[src*='edit']">
+            </div>
+          </div>` : ''}
+          <div class="switchiframe-hint">💡 进入 iframe 后，后续操作的元素查找将在 iframe 文档内进行；操作完成后用「退出」或「回到主文档」恢复。注意：跨域 iframe 无法访问</div>`;
+        break;
+
+      case 'elementCount':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder=".item, li, //div[@class='row']">
+            </div>
+            <div class="field-group flex-1">
+              <label>保存到变量</label>
+              <input type="text" class="field-countVariable" data-id="${op.id}" value="${this.escapeHtml(op.countVariable || '')}" placeholder="itemCount">
+            </div>
+          </div>
+          <div class="elementcount-hint">💡 统计匹配元素数量并保存到变量，常配合条件判断 (variableEquals/variableNotEmpty) 使用</div>`;
+        break;
+
+      case 'fileDownload':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>文件URL (支持变量)</label>
+              <input type="text" class="field-downloadUrl" data-id="${op.id}" value="${this.escapeHtml(op.downloadUrl || '')}" placeholder="https://example.com/file.pdf">
+            </div>
+            <div class="field-group flex-1">
+              <label>保存文件名 (可选)</label>
+              <input type="text" class="field-downloadFilename" data-id="${op.id}" value="${this.escapeHtml(op.downloadFilename || '')}" placeholder="report.pdf">
+            </div>
+          </div>
+          <div class="filedownload-hint">💡 通过创建 &lt;a download&gt; 触发浏览器下载；同源 URL 可指定文件名，跨域时浏览器可能使用原文件名</div>`;
+        break;
+
+      case 'pageInfo':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>信息类型</label>
+              <select class="field-infoType" data-id="${op.id}">
+                <option value="url" ${op.infoType === 'url' ? 'selected' : ''}>当前URL (url)</option>
+                <option value="title" ${(op.infoType || 'url') === 'title' ? 'selected' : ''}>页面标题 (title)</option>
+                <option value="referrer" ${op.infoType === 'referrer' ? 'selected' : ''}>来源页 (referrer)</option>
+                <option value="domain" ${op.infoType === 'domain' ? 'selected' : ''}>域名 (domain)</option>
+                <option value="hostname" ${op.infoType === 'hostname' ? 'selected' : ''}>主机名 (hostname)</option>
+                <option value="pathname" ${op.infoType === 'pathname' ? 'selected' : ''}>路径 (pathname)</option>
+                <option value="search" ${op.infoType === 'search' ? 'selected' : ''}>查询串 (search)</option>
+                <option value="hash" ${op.infoType === 'hash' ? 'selected' : ''}>锚点 (hash)</option>
+                <option value="userAgent" ${op.infoType === 'userAgent' ? 'selected' : ''}>UA (userAgent)</option>
+                <option value="language" ${op.infoType === 'language' ? 'selected' : ''}>语言 (language)</option>
+              </select>
+            </div>
+            <div class="field-group flex-2">
+              <label>保存到变量</label>
+              <input type="text" class="field-infoVariable" data-id="${op.id}" value="${this.escapeHtml(op.infoVariable || '')}" placeholder="currentUrl">
+            </div>
+          </div>
+          <div class="pageinfo-hint">💡 获取页面/浏览器信息到变量，后续可用 {{var:变量名}} 引用</div>`;
+        break;
+
+      case 'elementStyle':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target">
+            </div>
+            <div class="field-group flex-1">
+              <label>操作类型</label>
+              <select class="field-styleAction" data-id="${op.id}">
+                <option value="set" ${(op.styleAction || 'set') === 'set' ? 'selected' : ''}>设置样式</option>
+                <option value="get" ${op.styleAction === 'get' ? 'selected' : ''}>获取样式</option>
+                <option value="remove" ${op.styleAction === 'remove' ? 'selected' : ''}>移除样式</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>CSS属性名 (支持变量)</label>
+              <input type="text" class="field-stylePropertyName" data-id="${op.id}" value="${this.escapeHtml(op.stylePropertyName || '')}" placeholder="color, display, background-color">
+            </div>
+            ${op.styleAction !== 'remove' ? `
+            <div class="field-group flex-2">
+              <label>属性值 (支持变量)</label>
+              <input type="text" class="field-stylePropertyValue" data-id="${op.id}" value="${this.escapeHtml(op.stylePropertyValue || '')}" placeholder="red, none, 10px">
+            </div>` : ''}
+          </div>
+          ${op.styleAction === 'get' ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>保存到变量 (获取时)</label>
+              <input type="text" class="field-styleVariable" data-id="${op.id}" value="${this.escapeHtml(op.styleVariable || '')}" placeholder="bgColor">
+            </div>
+          </div>` : ''}
+          <div class="elementstyle-hint">💡 设置/获取/移除元素的内联样式；获取的是计算样式 (getComputedStyle)，用 CSS 连字符格式 (如 background-color)</div>`;
+        break;
+
+      case 'triggerEvent':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="留空则触发到 document">
+            </div>
+            <div class="field-group flex-1">
+              <label>事件类型 (支持变量)</label>
+              <input type="text" class="field-eventType" data-id="${op.id}" value="${this.escapeHtml(op.eventType || '')}" placeholder="click, submit, my-custom-event">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label class="checkbox-label">
+                <input type="checkbox" class="field-eventBubbles" data-id="${op.id}" ${op.eventBubbles !== false ? 'checked' : ''}>
+                <span>冒泡 (bubbles)</span>
+              </label>
+            </div>
+            <div class="field-group flex-1">
+              <label class="checkbox-label">
+                <input type="checkbox" class="field-eventCancelable" data-id="${op.id}" ${op.eventCancelable !== false ? 'checked' : ''}>
+                <span>可取消 (cancelable)</span>
+              </label>
+            </div>
+          </div>
+          <div class="field-group">
+            <label>事件初始化参数 (JSON，可选，支持变量)</label>
+            <textarea class="field-eventInit" data-id="${op.id}" rows="2" placeholder='{"detail": "data"}, {"clientX": 10, "clientY": 20}'>${this.escapeHtml(op.eventInit || '')}</textarea>
+          </div>
+          <div class="triggerevent-hint">💡 触发任意 DOM 事件；自动识别 Mouse/Keyboard/Drag/Wheel/Custom 事件类型，未知类型用 CustomEvent 触发</div>`;
+        break;
     }
 
     fields += `
@@ -1839,7 +2020,16 @@ class OperationManager {
       'field-jsonText': 'jsonText',
       'field-jsonPath': 'jsonPath',
       'field-jsonSaveVariable': 'jsonSaveVariable',
-      'field-waitExpectedText': 'waitExpectedText'
+      'field-waitExpectedText': 'waitExpectedText',
+      'field-countVariable': 'countVariable',
+      'field-downloadUrl': 'downloadUrl',
+      'field-downloadFilename': 'downloadFilename',
+      'field-infoVariable': 'infoVariable',
+      'field-stylePropertyName': 'stylePropertyName',
+      'field-stylePropertyValue': 'stylePropertyValue',
+      'field-styleVariable': 'styleVariable',
+      'field-eventType': 'eventType',
+      'field-eventInit': 'eventInit'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -2016,6 +2206,33 @@ class OperationManager {
       s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'waitTextMatchMode', e.target.value));
     });
 
+    document.querySelectorAll('.field-iframeAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'iframeAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-infoType').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'infoType', e.target.value));
+    });
+
+    document.querySelectorAll('.field-styleAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'styleAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    ['field-eventBubbles', 'field-eventCancelable'].forEach(cls => {
+      document.querySelectorAll(`.${cls}`).forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const prop = cls === 'field-eventBubbles' ? 'eventBubbles' : 'eventCancelable';
+          this.updateOperation(parseInt(e.target.dataset.id), prop, e.target.checked);
+        });
+      });
+    });
+
     ['field-modCtrl', 'field-modShift', 'field-modAlt'].forEach(cls => {
       document.querySelectorAll(`.${cls}`).forEach(cb => {
         cb.addEventListener('change', (e) => {
@@ -2068,7 +2285,9 @@ class OperationManager {
       hover: '🖱', doubleClick: '👆👆', if: '🔀', fileUpload: '📁', setVariable: '📦',
       setAttribute: '🏷', storage: '🗄', navigate: '🧭', mediaControl: '🎬',
       rightClick: '🖱', focus: '🎯', clear: '🧹', scrollToElement: '📍',
-      drag: '🤚', mouseWheel: '🎰', log: '📜', hideElement: '🙈', jsonExtract: '🔧'
+      drag: '🤚', mouseWheel: '🎰', log: '📜', hideElement: '🙈', jsonExtract: '🔧',
+      switchIframe: '🖼', elementCount: '🔢', fileDownload: '⬇', pageInfo: '📄',
+      elementStyle: '🎨', triggerEvent: '🎉'
     };
     return icons[type] || '❓';
   }
@@ -2103,7 +2322,7 @@ class OperationManager {
   }
 
   showHelp() {
-    alert(`📖 使用帮助 v2.0.0
+    alert(`📖 使用帮助 v2.1.0
 
 【操作类型】
 📝 输入       - 填写表单内容 (支持变量)
@@ -2139,6 +2358,12 @@ class OperationManager {
 📜 打印日志   - 输出自定义日志
 🙈 隐藏元素   - 隐藏/显示/切换元素 (display:none)
 🔧 JSON提取  - 解析 JSON 并按路径提取值
+🖼 切换iframe - 进入/退出/回到主文档 (操作iframe内元素)
+🔢 元素计数   - 统计匹配元素数量到变量
+⬇ 文件下载   - 通过 URL 触发浏览器下载
+📄 页面信息   - 获取 URL/标题/域名/UA 等到变量
+🎨 元素样式   - 设置/获取/移除元素 CSS 样式
+🎉 触发事件   - 触发任意 DOM 事件 (含自定义事件)
 
 【等待操作详解】
 - 固定时长：等待 N 毫秒
@@ -2163,6 +2388,42 @@ class OperationManager {
 - 来源：从变量读取 / 直接输入 JSON 文本
 - 路径语法：a.b.c 或 a[0].b 或 a/b/c
 - 结果可保存到自定义变量供后续使用
+
+【切换 iframe 详解】
+- 进入 (enter)：通过选择器定位 iframe 元素，将元素查找上下文切换到该 iframe 文档
+- 退出 (exit)：回到父级文档
+- 回到主文档 (main)：直接回到最顶层主文档
+进入 iframe 后，后续输入/点击/提取等操作的元素查找都会在该 iframe 内进行；
+跨域 iframe 因浏览器安全策略无法访问
+
+【元素计数详解】
+统计匹配选择器的元素数量并保存到变量，支持 CSS 选择器和 XPath；
+常配合条件判断 (variableEquals / variableNotEmpty) 实现循环控制
+
+【文件下载详解】
+通过创建 <a download> 元素触发浏览器下载；
+同源 URL 可指定保存文件名，跨域 URL 浏览器可能使用原文件名
+
+【页面信息详解】
+获取页面或浏览器的元信息到变量，支持：
+url / title / referrer / domain / hostname / pathname /
+search / hash / userAgent / language
+
+【元素样式详解】
+- 设置样式：使用 setProperty 设置内联样式
+- 获取样式：使用 getComputedStyle 获取计算样式，可保存到变量
+- 移除样式：使用 removeProperty 移除内联样式
+属性名使用 CSS 连字符格式 (如 background-color，而非 backgroundColor)
+
+【触发事件详解】
+触发任意 DOM 事件，自动识别事件类型：
+- Mouse 事件: click, mousedown, mouseup, mouseover, dblclick, contextmenu...
+- Keyboard 事件: keydown, keyup, keypress
+- Drag 事件: dragstart, drag, dragenter, dragover, drop, dragend
+- Wheel 事件: wheel
+- 基础事件: input, change, submit, focus, blur, load, scroll, resize...
+- 其他类型: 使用 CustomEvent 触发 (可携带 detail 数据)
+事件初始化参数为 JSON 格式，留空则使用默认值
 
 【元素拾取器】
 点击 🎯 按钮可进入拾取模式
