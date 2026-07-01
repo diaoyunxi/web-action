@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/diaoyunxi/web-action)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/diaoyunxi/web-action)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
@@ -72,6 +72,12 @@
 | **页面信息** | 📄 | 获取 URL/标题/域名/UA 到变量 | 流程数据采集 |
 | **元素样式** | 🎨 | 设置/获取/移除元素 CSS 样式 | 动态样式控制 |
 | **触发事件** | 🎉 | 触发任意 DOM 事件 (含自定义事件) | 框架事件触发 |
+| **正则提取** | 🔬 | 从变量或文本中按正则提取匹配内容 | 解析字符串、捕获分组 |
+| **元素位置** | 📐 | 获取元素 getBoundingClientRect 坐标 | 定位计算、空间分析 |
+| **数组操作** | 📚 | push/unshift/pop/shift/length/join/slice | 数据结构管理 |
+| **滚动到边缘** | ⏫ | 滚动到页面/元素上下左右边缘 | 长列表定位 |
+| **文本转语音** | 🔊 | speechSynthesis 朗读文本 | 语音播报、无障碍 |
+| **网络状态** | 📡 | 获取在线状态/网络类型/下行速度 | 自适应流程控制 |
 
 ### 🔄 重复执行模式
 
@@ -303,6 +309,41 @@ git clone https://github.com/diaoyunxi/web-action.git
 执行：动态修改元素样式 → 获取计算宽度 → 触发自定义事件通知框架 → 触发表单提交
 ```
 
+### 示例 13：正则提取 + 数组操作 + 元素位置（批量列表解析）
+
+```
+操作步骤：
+1. 🔬 正则提取 → 来源: 从文本 → 文本: "订单#1001,订单#1002,订单#1003"
+                 → 正则: #(\\d+) → 标志: g → 捕获组: 1
+                 → 保存到变量: orderIds
+2. 📚 数组操作 → 操作: length → 数组变量名: orderIds → 保存到变量: orderCount
+3. 📜 日志 → 内容: 共解析 {{var:orderCount}} 个订单 ID
+4. 📐 元素位置 → 选择器: #order-table → 信息类型: all → 保存前缀: pos
+5. 📜 日志 → 内容: 表格位置 top={{var:pos_top}}, height={{var:pos_height}}
+6. ⏫ 滚动到边缘 → 方向: bottom → 行为: smooth (滚动到表格底部)
+
+执行：用正则提取所有订单号 → 计算订单数量 → 打印日志 → 获取表格坐标 → 滚动到底部
+注意：数组以 JSON 字符串形式存储在变量中，可被 length/join/slice 等操作读取
+```
+
+### 示例 14：文本转语音 + 网络状态（自适应语音播报）
+
+```
+操作步骤：
+1. 📡 网络状态 → 信息类型: all → 保存前缀: net
+2. 🔀 条件判断 → 条件类型: 变量等于 → 变量名: net_online → 期望值: true
+                  → 模式: 条件不满足时跳过 (skip)
+3. 🔊 文本转语音 → 文本: 网络已连接，类型 {{var:net_effectiveType}}，开始执行任务
+                   → 语速: 1 → 音量: 1 → 语言: zh-CN
+4. 🎬 媒体 → 操作: 播放 (开始任务背景音)
+5. 🔊 文本转语音 → 文本: 任务执行完毕，感谢使用
+                   → 语速: 1 → 音量: 0.8
+
+执行：检测网络状态 → 在线时用中文语音播报网络类型 → 播放媒体 → 任务完成播报
+注意：speechSynthesis 在每个字 200ms（最少 10s）超时保护下完成朗读
+```
+
+
 ---
 
 ## 📖 使用指南
@@ -311,7 +352,7 @@ git clone https://github.com/diaoyunxi/web-action.git
 
 ```
 ┌──────────────────────────────────────────┐
-│  🎯 网页操作执行器              v2.1.0  │
+│  🎯 网页操作执行器              v2.2.0  │
 ├──────────────────────────────────────────┤
 │  ┌────────────────────────────────────┐  │
 │  │ #1 📝 输入用户名                   │  │
@@ -751,6 +792,28 @@ chrome.storage.local.get(null, console.log)
 ---
 
 ## 📝 更新日志
+
+### v2.2.0 (2026-07-02)
+
+**新增（6 种新操作类型）**
+- ✨ 正则提取操作（type: `regexExtract`）- 从变量或文本中按正则表达式提取匹配内容，支持指定捕获组索引和标志位（g/i/m/s/u/y），可保存到自定义变量。常配合 HTTP/提取操作进行字符串二次解析，支持 `variable`（从变量读取）与 `text`（直接文本）两种来源
+- ✨ 元素位置操作（type: `elementPosition`）- 通过 `getBoundingClientRect()` 获取元素坐标，支持 8 种字段（x/y/width/height/top/bottom/left/right）和 `all` 全部模式。`all` 模式以 `前缀_字段名` 形式批量保存到变量（如 `pos_x`、`pos_width`），便于空间计算与定位判断
+- ✨ 数组操作（type: `arrayOperation`）- 对 JSON 数组变量执行操作：`push`（末尾追加）/`unshift`（开头插入）/`pop`（末尾弹出）/`shift`（开头弹出）/`length`（取长度）/`join`（连接为字符串）/`indexOf`（查找索引）/`slice`（切片）/`clear`（清空）。数组以 JSON 字符串形式存储以兼容 `chrome.storage` 的字符串值
+- ✨ 滚动到边缘操作（type: `scrollToEdge`）- 将页面或指定元素滚动到 top/bottom/left/right 四个边缘，支持 smooth/auto 滚动行为。未指定选择器时作用于整个页面（`window.scrollTo`），指定元素时作用于元素的 `scrollLeft/scrollTop`
+- ✨ 文本转语音操作（type: `textToSpeech`）- 使用 Web Speech API 的 `speechSynthesis` 朗读文本，支持语言（lang）、语速（rate 0-2）、音调（pitch 0-2）、音量（volume 0-1）、声音（voice URI）。使用 Promise 等待朗读完成，含超时保护（每字 200ms，最少 10s），保证后续操作在朗读完成后执行
+- ✨ 网络状态操作（type: `networkStatus`）- 获取浏览器网络信息：`online`（navigator.onLine）/`effectiveType`（4g/3g/2g/slow-2g）/`downlink`（下行 Mbps）/`rtt`（往返时延 ms）/`saveData`（节流模式）/`all`（全部以 `前缀_字段名` 保存）。基于 Network Information API，部分浏览器可能不支持部分字段（将保存 `unknown`）
+
+**变更**
+- 📌 `manifest.json` 版本升至 2.2.0，描述补充新功能
+- 📌 `popup.html` 新增 6 个操作按钮（正则/位置/数组/边缘/语音/网络）、版本号升级
+- 🎨 `styles.css` 新增 v2.2.0 操作类型样式（按钮、类型标签、提示框）
+- 📚 README 新增 6 种操作说明、2 个使用示例（示例 13/14）、v2.2.0 更新日志
+- 🔧 `popup.js` showHelp 文档同步更新所有新操作说明
+- 🔧 `popup.js` exportConfig 版本号同步升级至 2.2.0
+- 🔧 `popup.js` typeMap/fieldMap/renderFields/onMessage 同步新增 6 种操作的字段配置与结果处理
+- 🔧 `content.js` executeOperation 新增 6 个 case 分发，实现 6 个执行方法 + `parseArrayValue` 辅助方法
+
+**操作类型总数：46 种**（v2.1.0 的 40 种 + v2.2.0 新增 6 种）
 
 ### v2.1.0 (2026-07-01)
 

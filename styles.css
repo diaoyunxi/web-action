@@ -1,4 +1,4 @@
-/* ==================== 基础样式 v1.7.0 ==================== */
+/* ==================== 基础样式 v2.2.0 ==================== */
 
 * {
   margin: 0;
@@ -889,3 +889,43 @@ body {
 .pageinfo-hint { border-left: 3px solid #5D4037; }
 .elementstyle-hint { border-left: 3px solid #00838F; }
 .triggerevent-hint { border-left: 3px solid #AD1457; }
+
+/* ==================== v2.2.0 新增操作样式 ==================== */
+
+/* v2.2.0 新增操作按钮样式 */
+.btn-regexextract { background: #6A1B9A; color: white; }
+.btn-elementposition { background: #00838F; color: white; }
+.btn-arrayoperation { background: #4527A0; color: white; }
+.btn-scrolltoedge { background: #0277BD; color: white; }
+.btn-texttospeech { background: #AD1457; color: white; }
+.btn-networkstatus { background: #33691E; color: white; }
+
+/* v2.2.0 新增操作类型标签样式 */
+.type-regexExtract { background: #F3E5F5; color: #6A1B9A; }
+.type-elementPosition { background: #E0F7FA; color: #00838F; }
+.type-arrayOperation { background: #EDE7F6; color: #4527A0; }
+.type-scrollToEdge { background: #E1F5FE; color: #0277BD; }
+.type-textToSpeech { background: #FCE4EC; color: #AD1457; }
+.type-networkStatus { background: #E8F5E9; color: #33691E; }
+
+/* v2.2.0 新增提示框样式 */
+.regexextract-hint,
+.elementposition-hint,
+.arrayoperation-hint,
+.scrolltoedge-hint,
+.texttospeech-hint,
+.networkstatus-hint {
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 5px;
+  margin-top: 4px;
+}
+
+.regexextract-hint { border-left: 3px solid #6A1B9A; }
+.elementposition-hint { border-left: 3px solid #00838F; }
+.arrayoperation-hint { border-left: 3px solid #4527A0; }
+.scrolltoedge-hint { border-left: 3px solid #0277BD; }
+.texttospeech-hint { border-left: 3px solid #AD1457; }
+.networkstatus-hint { border-left: 3px solid #33691E; }

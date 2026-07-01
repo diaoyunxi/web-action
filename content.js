@@ -1,11 +1,12 @@
 /**
- * 网页操作执行器 - 内容脚本 v2.1.0
+ * 网页操作执行器 - 内容脚本 v2.2.0
  * 在目标页面中执行实际操作
  * 支持: 输入、点击、滑动、刷新、等待、选择、脚本、提取、键盘、截屏、剪贴板、
  *       HTTP请求、标签页、通知、Cookie、悬停、双击、右键点击、聚焦、清空、
  *       滚动到元素、拖拽、鼠标滚轮、条件判断、文件上传、变量设置、元素属性、
  *       本地存储、页面导航、媒体控制、打印日志、隐藏元素、JSON提取、
- *       切换iframe、元素计数、文件下载、页面信息、元素样式、触发事件
+ *       切换iframe、元素计数、文件下载、页面信息、元素样式、触发事件、
+ *       正则提取、元素位置、数组操作、滚动到边缘、文本转语音、网络状态
  */
 
 // 用于条件判断操作：抛出该错误将跳过当前循环迭代的剩余操作
@@ -377,6 +378,12 @@ class OperationExecutor {
       case 'pageInfo': await this.executePageInfo(operation); break;
       case 'elementStyle': await this.executeElementStyle(operation); break;
       case 'triggerEvent': await this.executeTriggerEvent(operation); break;
+      case 'regexExtract': await this.executeRegexExtract(operation); break;
+      case 'elementPosition': await this.executeElementPosition(operation); break;
+      case 'arrayOperation': await this.executeArrayOperation(operation); break;
+      case 'scrollToEdge': await this.executeScrollToEdge(operation); break;
+      case 'textToSpeech': await this.executeTextToSpeech(operation); break;
+      case 'networkStatus': await this.executeNetworkStatus(operation); break;
       default: throw new Error(`未知操作类型: ${operation.type}`);
     }
   }
@@ -2372,6 +2379,541 @@ class OperationExecutor {
       this.highlightElement(element, '#AD1457');
     }
     console.log(`🎉 触发事件: ${eventType} on ${operation.selector || 'document'}`);
+  }
+
+  // ==================== 正则提取操作 ====================
+
+  async executeRegexExtract(operation) {
+    const regexSource = operation.regexSource || 'variable';
+    const pattern = this.substituteVariables(operation.regexPattern || '');
+    if (!pattern) {
+      throw new Error('正则表达式为空');
+    }
+
+    let text = '';
+    switch (regexSource) {
+      case 'variable': {
+        const varName = operation.regexVariableName || '';
+        if (!varName) throw new Error('变量名为空');
+        text = this.variables ? String(this.variables[varName] ?? '') : '';
+        if (!text) throw new Error(`变量 ${varName} 不存在或为空`);
+        break;
+      }
+      case 'text': {
+        text = this.substituteVariables(operation.regexText || '');
+        if (!text) throw new Error('待匹配文本为空');
+        break;
+      }
+      default:
+        throw new Error(`未知正则来源: ${regexSource}`);
+    }
+
+    let regex;
+    try {
+      regex = new RegExp(pattern, operation.regexFlags || '');
+    } catch (e) {
+      throw new Error(`正则表达式无效: ${e.message}`);
+    }
+
+    const groupIndex = parseInt(operation.regexGroupIndex || '0', 10) || 0;
+    if (groupIndex < 0) {
+      throw new Error('捕获组索引不能为负数');
+    }
+
+    const match = regex.exec(text);
+    let value = '';
+    let matchIndex = groupIndex;
+
+    if (match) {
+      if (groupIndex === 0) {
+        value = match[0] || '';
+      } else if (groupIndex < match.length) {
+        value = match[groupIndex] || '';
+      } else {
+        throw new Error(`捕获组索引 ${groupIndex} 超出范围 (该匹配共有 ${match.length - 1} 个捕获组)`);
+      }
+    } else {
+      console.warn(`🔬 正则未匹配到内容: ${pattern}`);
+    }
+
+    console.log(`🔬 正则提取: ${pattern} → "${value.substring(0, 80)}"`);
+
+    const saveVar = operation.regexSaveVariable || '';
+    if (saveVar) {
+      this.variables[saveVar] = value;
+      chrome.runtime.sendMessage({
+        action: 'storeData',
+        key: saveVar,
+        value
+      });
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'regexExtractResult',
+      pattern,
+      value,
+      matchIndex,
+      variable: saveVar
+    });
+  }
+
+  // ==================== 元素位置操作 ====================
+
+  async executeElementPosition(operation) {
+    const element = this.findElement(operation.selector);
+    if (!element) {
+      throw new Error(`未找到元素: ${operation.selector}`);
+    }
+
+    element.scrollIntoView({ behavior: 'auto', block: 'center' });
+    await this.sleep(100);
+
+    const rect = element.getBoundingClientRect();
+    const infoType = operation.positionInfoType || 'all';
+    const prefix = operation.positionSavePrefix || 'pos';
+
+    const allFields = {
+      x: String(Math.round(rect.x)),
+      y: String(Math.round(rect.y)),
+      width: String(Math.round(rect.width)),
+      height: String(Math.round(rect.height)),
+      top: String(Math.round(rect.top)),
+      bottom: String(Math.round(rect.bottom)),
+      left: String(Math.round(rect.left)),
+      right: String(Math.round(rect.right))
+    };
+
+    const storeVar = (name, value) => {
+      this.variables[name] = value;
+      chrome.runtime.sendMessage({
+        action: 'storeData',
+        key: name,
+        value
+      });
+    };
+
+    if (infoType === 'all') {
+      // 同时保存所有字段，变量名为 前缀_字段名
+      for (const [field, val] of Object.entries(allFields)) {
+        storeVar(`${prefix}_${field}`, val);
+      }
+      console.log(`📐 元素位置 [all]: 已保存 ${Object.keys(allFields).length} 个变量 (${prefix}_x/y/width/...)`);
+    } else {
+      const val = allFields[infoType];
+      if (val === undefined) {
+        throw new Error(`未知位置信息类型: ${infoType}`);
+      }
+      storeVar(prefix, val);
+      console.log(`📐 元素位置 [${infoType}]: ${prefix}=${val}`);
+    }
+
+    this.highlightElement(element, '#00897B');
+
+    chrome.runtime.sendMessage({
+      action: 'elementPositionResult',
+      x: allFields.x,
+      y: allFields.y,
+      width: allFields.width,
+      height: allFields.height,
+      infoType,
+      prefix
+    });
+  }
+
+  // ==================== 数组操作 ====================
+
+  async executeArrayOperation(operation) {
+    const arrayName = operation.arrayName || '';
+    if (!arrayName) {
+      throw new Error('数组变量名为空');
+    }
+
+    const action = operation.arrayAction || 'push';
+    const saveVar = operation.arraySaveVariable || '';
+
+    // 读取现有数组 (以 JSON 字符串形式存储)
+    let arr = [];
+    const existing = this.variables ? this.variables[arrayName] : undefined;
+    if (existing !== undefined && existing !== null && existing !== '') {
+      if (Array.isArray(existing)) {
+        arr = [...existing];
+      } else if (typeof existing === 'string') {
+        let parsed;
+        try {
+          parsed = JSON.parse(existing);
+        } catch (e) {
+          throw new Error(`变量 ${arrayName} 不是有效的 JSON 数组: ${e.message}`);
+        }
+        if (Array.isArray(parsed)) {
+          arr = parsed;
+        } else {
+          throw new Error(`变量 ${arrayName} 不是数组 (实际类型: ${typeof parsed})`);
+        }
+      } else {
+        throw new Error(`变量 ${arrayName} 不是数组`);
+      }
+    }
+
+    const persistArray = () => {
+      this.variables[arrayName] = JSON.stringify(arr);
+      chrome.runtime.sendMessage({
+        action: 'storeData',
+        key: arrayName,
+        value: this.variables[arrayName]
+      });
+    };
+
+    const saveResult = (value) => {
+      if (saveVar) {
+        this.variables[saveVar] = String(value);
+        chrome.runtime.sendMessage({
+          action: 'storeData',
+          key: saveVar,
+          value: String(value)
+        });
+      }
+    };
+
+    let result = '';
+    let resultLength = arr.length;
+
+    switch (action) {
+      case 'push': {
+        const rawValue = this.substituteVariables(operation.arrayValue || '');
+        const items = this.parseArrayValue(rawValue);
+        arr.push(...items);
+        resultLength = arr.length;
+        persistArray();
+        console.log(`📚 数组 push: ${arrayName} 长度=${arr.length}`);
+        break;
+      }
+      case 'unshift': {
+        const rawValue = this.substituteVariables(operation.arrayValue || '');
+        const items = this.parseArrayValue(rawValue);
+        arr.unshift(...items);
+        resultLength = arr.length;
+        persistArray();
+        console.log(`📚 数组 unshift: ${arrayName} 长度=${arr.length}`);
+        break;
+      }
+      case 'pop': {
+        if (arr.length === 0) {
+          throw new Error(`数组 ${arrayName} 为空，无法 pop`);
+        }
+        result = arr.pop();
+        resultLength = arr.length;
+        persistArray();
+        saveResult(result);
+        console.log(`📚 数组 pop: ${arrayName} → "${String(result).substring(0, 50)}"`);
+        break;
+      }
+      case 'shift': {
+        if (arr.length === 0) {
+          throw new Error(`数组 ${arrayName} 为空，无法 shift`);
+        }
+        result = arr.shift();
+        resultLength = arr.length;
+        persistArray();
+        saveResult(result);
+        console.log(`📚 数组 shift: ${arrayName} → "${String(result).substring(0, 50)}"`);
+        break;
+      }
+      case 'length': {
+        result = String(arr.length);
+        resultLength = arr.length;
+        saveResult(result);
+        console.log(`📚 数组 length: ${arrayName} = ${arr.length}`);
+        break;
+      }
+      case 'join': {
+        const separator = this.substituteVariables(operation.arrayValue || ',');
+        result = arr.join(separator);
+        resultLength = arr.length;
+        saveResult(result);
+        console.log(`📚 数组 join: ${arrayName} → "${result.substring(0, 80)}"`);
+        break;
+      }
+      case 'indexOf': {
+        const searchValue = this.substituteVariables(operation.arrayValue || '');
+        const idx = arr.indexOf(searchValue);
+        result = String(idx);
+        resultLength = arr.length;
+        saveResult(result);
+        console.log(`📚 数组 indexOf: ${arrayName} 查找 "${searchValue}" → ${idx}`);
+        break;
+      }
+      case 'slice': {
+        const startIdx = parseInt(this.substituteVariables(operation.arrayValue || '0')) || 0;
+        const endIdxStr = this.substituteVariables(operation.arrayIndex || '');
+        const endIdx = endIdxStr ? parseInt(endIdxStr) : undefined;
+        const sliced = arr.slice(startIdx, endIdx);
+        result = JSON.stringify(sliced);
+        resultLength = sliced.length;
+        saveResult(result);
+        console.log(`📚 数组 slice: ${arrayName}(${startIdx}, ${endIdx}) → 长度 ${sliced.length}`);
+        break;
+      }
+      case 'clear': {
+        arr = [];
+        resultLength = 0;
+        persistArray();
+        console.log(`📚 数组 clear: ${arrayName}`);
+        break;
+      }
+      default:
+        throw new Error(`未知数组操作: ${action}`);
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'arrayOperationResult',
+      arrayName,
+      arrayAction: action,
+      length: resultLength,
+      result: String(result),
+      variable: saveVar
+    });
+  }
+
+  // 解析数组操作值：如果是 JSON 数组字符串则展开为多项，否则视为单个值
+  parseArrayValue(rawValue) {
+    if (rawValue === null || rawValue === undefined || rawValue === '') {
+      return [];
+    }
+    const trimmed = String(rawValue).trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(item => (typeof item === 'object' ? JSON.stringify(item) : String(item)));
+        }
+      } catch (e) {
+        // 不是有效 JSON 数组，按单值处理
+      }
+    }
+    return [String(rawValue)];
+  }
+
+  // ==================== 滚动到边缘操作 ====================
+
+  async executeScrollToEdge(operation) {
+    const direction = operation.edgeDirection || 'bottom';
+    const behavior = operation.edgeBehavior || 'smooth';
+
+    let scrollTarget;
+    if (operation.selector) {
+      const element = this.findElement(operation.selector);
+      if (!element) {
+        throw new Error(`未找到元素: ${operation.selector}`);
+      }
+      scrollTarget = element;
+    } else {
+      scrollTarget = document.scrollingElement || document.documentElement || document.body;
+    }
+
+    // 对于普通元素需要滚动其内部；对于页面则使用 window.scrollTo
+    const isWindow = !operation.selector;
+
+    if (isWindow) {
+      const scrollOpts = { behavior };
+      switch (direction) {
+        case 'top':
+          scrollOpts.top = 0;
+          scrollOpts.left = 0;
+          break;
+        case 'bottom':
+          scrollOpts.top = document.documentElement.scrollHeight || document.body.scrollHeight;
+          scrollOpts.left = 0;
+          break;
+        case 'left':
+          scrollOpts.left = 0;
+          scrollOpts.top = window.scrollY;
+          break;
+        case 'right':
+          scrollOpts.left = document.documentElement.scrollWidth || document.body.scrollWidth;
+          scrollOpts.top = window.scrollY;
+          break;
+        default:
+          throw new Error(`未知滚动方向: ${direction}`);
+      }
+      window.scrollTo(scrollOpts);
+    } else {
+      switch (direction) {
+        case 'top':
+          scrollTarget.scrollTop = 0;
+          break;
+        case 'bottom':
+          scrollTarget.scrollTop = scrollTarget.scrollHeight;
+          break;
+        case 'left':
+          scrollTarget.scrollLeft = 0;
+          break;
+        case 'right':
+          scrollTarget.scrollLeft = scrollTarget.scrollWidth;
+          break;
+        default:
+          throw new Error(`未知滚动方向: ${direction}`);
+      }
+    }
+
+    await this.sleep(behavior === 'smooth' ? 500 : 100);
+
+    if (!isWindow) {
+      this.highlightElement(scrollTarget, '#1565C0');
+    }
+    console.log(`⏫ 滚动到边缘: ${direction} on ${operation.selector || 'window'}`);
+  }
+
+  // ==================== 文本转语音操作 ====================
+
+  async executeTextToSpeech(operation) {
+    const text = this.substituteVariables(operation.ttsText || '');
+    if (!text) {
+      throw new Error('朗读文本为空');
+    }
+
+    if (!('speechSynthesis' in window)) {
+      throw new Error('当前浏览器不支持 Web Speech API (speechSynthesis)');
+    }
+
+    const sendResult = (success, error = '') => {
+      chrome.runtime.sendMessage({
+        action: 'textToSpeechResult',
+        success,
+        error,
+        text
+      });
+    };
+
+    // 取消可能正在进行的朗读
+    try {
+      window.speechSynthesis.cancel();
+    } catch (e) { /* ignore */ }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    const lang = this.substituteVariables(operation.ttsLang || '');
+    if (lang) {
+      utterance.lang = lang;
+    }
+    const rate = parseFloat(operation.ttsRate);
+    if (!isNaN(rate)) {
+      utterance.rate = Math.max(0.1, Math.min(10, rate));
+    }
+    const pitch = parseFloat(operation.ttsPitch);
+    if (!isNaN(pitch)) {
+      utterance.pitch = Math.max(0, Math.min(2, pitch));
+    }
+    const volume = parseFloat(operation.ttsVolume);
+    if (!isNaN(volume)) {
+      utterance.volume = Math.max(0, Math.min(1, volume));
+    }
+
+    // 指定语音名称
+    const voiceName = this.substituteVariables(operation.ttsVoice || '');
+    if (voiceName) {
+      const voices = window.speechSynthesis.getVoices();
+      const matched = voices.find(v => v.name && v.name.includes(voiceName));
+      if (matched) {
+        utterance.voice = matched;
+      } else {
+        console.warn(`🔊 未找到语音 "${voiceName}"，将使用默认语音`);
+      }
+    }
+
+    // 等待朗读完成的 Promise
+    return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const timeoutMs = Math.max(10000, text.length * 200); // 至少 10s，每字 200ms
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try { window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+        sendResult(false, `朗读超时 (${timeoutMs}ms)`);
+        reject(new Error(`朗读超时 (${timeoutMs}ms)`));
+      }, timeoutMs);
+
+      utterance.onend = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        console.log(`🔊 朗读完成: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
+        sendResult(true);
+        resolve();
+      };
+
+      utterance.onerror = (e) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        const errMsg = e.error || '朗读失败';
+        console.error('🔊 朗读错误:', errMsg);
+        sendResult(false, errMsg);
+        reject(new Error(`朗读失败: ${errMsg}`));
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        sendResult(false, e.message);
+        reject(new Error(`朗读启动失败: ${e.message}`));
+      }
+    });
+  }
+
+  // ==================== 网络状态操作 ====================
+
+  async executeNetworkStatus(operation) {
+    const infoType = operation.networkInfoType || 'all';
+    const prefix = operation.networkSavePrefix || 'net';
+
+    // Network Information API 在部分浏览器可用
+    const conn = (navigator.connection || navigator.mozConnection || navigator.webkitConnection);
+
+    const allFields = {
+      online: navigator.onLine ? 'true' : 'false',
+      effectiveType: conn && conn.effectiveType ? String(conn.effectiveType) : '',
+      downlink: conn && typeof conn.downlink === 'number' ? String(conn.downlink) : '',
+      rtt: conn && typeof conn.rtt === 'number' ? String(conn.rtt) : '',
+      saveData: conn && conn.saveData ? 'true' : 'false'
+    };
+
+    const storeVar = (name, value) => {
+      this.variables[name] = value;
+      chrome.runtime.sendMessage({
+        action: 'storeData',
+        key: name,
+        value
+      });
+    };
+
+    if (infoType === 'all') {
+      for (const [field, val] of Object.entries(allFields)) {
+        storeVar(`${prefix}_${field}`, val);
+      }
+      console.log(`📡 网络状态 [all]: 已保存 ${Object.keys(allFields).length} 个变量 (${prefix}_online/effectiveType/...)`);
+    } else {
+      const val = allFields[infoType];
+      if (val === undefined) {
+        throw new Error(`未知网络信息类型: ${infoType}`);
+      }
+      storeVar(prefix, val);
+      console.log(`📡 网络状态 [${infoType}]: ${prefix}=${val}`);
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'networkStatusResult',
+      online: allFields.online === 'true',
+      effectiveType: allFields.effectiveType,
+      downlink: allFields.downlink !== '' ? parseFloat(allFields.downlink) : undefined,
+      rtt: allFields.rtt !== '' ? parseInt(allFields.rtt) : undefined,
+      saveData: allFields.saveData === 'true',
+      infoType,
+      prefix
+    });
   }
 
   // ==================== 辅助等待方法 ====================

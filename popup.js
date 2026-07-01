@@ -1,6 +1,6 @@
 /**
- * 网页操作执行器 - 弹出窗口脚本 v2.1.0
- * 新增: 切换iframe、元素计数、文件下载、页面信息、元素样式、触发事件
+ * 网页操作执行器 - 弹出窗口脚本 v2.2.0
+ * 新增: 正则提取、元素位置、数组操作、滚动到边缘、文本转语音、网络状态
  */
 
 class OperationManager {
@@ -161,6 +161,12 @@ class OperationManager {
     document.getElementById('addPageInfo').addEventListener('click', () => this.addOperation('pageInfo'));
     document.getElementById('addElementStyle').addEventListener('click', () => this.addOperation('elementStyle'));
     document.getElementById('addTriggerEvent').addEventListener('click', () => this.addOperation('triggerEvent'));
+    document.getElementById('addRegexExtract').addEventListener('click', () => this.addOperation('regexExtract'));
+    document.getElementById('addElementPosition').addEventListener('click', () => this.addOperation('elementPosition'));
+    document.getElementById('addArrayOperation').addEventListener('click', () => this.addOperation('arrayOperation'));
+    document.getElementById('addScrollToEdge').addEventListener('click', () => this.addOperation('scrollToEdge'));
+    document.getElementById('addTextToSpeech').addEventListener('click', () => this.addOperation('textToSpeech'));
+    document.getElementById('addNetworkStatus').addEventListener('click', () => this.addOperation('networkStatus'));
 
     document.getElementById('executeAll').addEventListener('click', () => this.executeAllOperations());
     document.getElementById('stopExecution').addEventListener('click', () => this.stopExecution());
@@ -244,6 +250,16 @@ class OperationManager {
         this.handlePageInfoResult(request);
       } else if (request.action === 'elementStyleResult') {
         this.handleElementStyleResult(request);
+      } else if (request.action === 'regexExtractResult') {
+        this.handleRegexExtractResult(request);
+      } else if (request.action === 'elementPositionResult') {
+        this.handleElementPositionResult(request);
+      } else if (request.action === 'arrayOperationResult') {
+        this.handleArrayOperationResult(request);
+      } else if (request.action === 'networkStatusResult') {
+        this.handleNetworkStatusResult(request);
+      } else if (request.action === 'textToSpeechResult') {
+        this.handleTextToSpeechResult(request);
       }
     });
   }
@@ -377,6 +393,35 @@ class OperationManager {
     console.log('元素样式结果:', request.value);
   }
 
+  handleRegexExtractResult(request) {
+    const valuePreview = (request.value || '').substring(0, 80);
+    this.addLog('success', `🔬 正则提取 ${request.matchIndex !== undefined ? `组${request.matchIndex}` : ''}: ${valuePreview}${(request.value || '').length > 80 ? '...' : ''}`);
+    console.log('正则提取结果:', request.value);
+  }
+
+  handleElementPositionResult(request) {
+    this.addLog('success', `📐 元素位置 x=${request.x}, y=${request.y}, w=${request.width}, h=${request.height}`);
+    console.log('元素位置结果:', request);
+  }
+
+  handleArrayOperationResult(request) {
+    this.addLog('success', `📚 数组 ${request.arrayName} ${request.arrayAction} → 长度=${request.length}`);
+    console.log('数组操作结果:', request);
+  }
+
+  handleNetworkStatusResult(request) {
+    this.addLog('info', `📡 网络: ${request.online ? '在线' : '离线'}${request.effectiveType ? ` (${request.effectiveType})` : ''}${request.downlink !== undefined ? ` ↓${request.downlink}Mbps` : ''}${request.rtt !== undefined ? ` RTT${request.rtt}ms` : ''}`);
+    console.log('网络状态结果:', request);
+  }
+
+  handleTextToSpeechResult(request) {
+    if (request.success) {
+      this.addLog('success', `🔊 语音播放: ${request.text.substring(0, 50)}${request.text.length > 50 ? '...' : ''}`);
+    } else {
+      this.addLog('error', `🔊 语音播放失败: ${request.error || '未知错误'}`);
+    }
+  }
+
   // 【核心修复】确保 content script 已注入
   async ensureContentScriptInjected(tab) {
     try {
@@ -483,7 +528,13 @@ class OperationManager {
       fileDownload: { ...baseOperation, type: 'fileDownload', downloadUrl: '', downloadFilename: '', description: '文件下载' },
       pageInfo: { ...baseOperation, type: 'pageInfo', infoType: 'url', infoVariable: '', description: '页面信息' },
       elementStyle: { ...baseOperation, type: 'elementStyle', selector: '', styleAction: 'set', stylePropertyName: '', stylePropertyValue: '', styleVariable: '', description: '元素样式' },
-      triggerEvent: { ...baseOperation, type: 'triggerEvent', selector: '', eventType: '', eventBubbles: true, eventCancelable: true, eventInit: '', description: '触发事件' }
+      triggerEvent: { ...baseOperation, type: 'triggerEvent', selector: '', eventType: '', eventBubbles: true, eventCancelable: true, eventInit: '', description: '触发事件' },
+      regexExtract: { ...baseOperation, type: 'regexExtract', regexSource: 'variable', regexVariableName: '', regexText: '', regexPattern: '', regexFlags: 'g', regexGroupIndex: '0', regexSaveVariable: '', description: '正则提取' },
+      elementPosition: { ...baseOperation, type: 'elementPosition', selector: '', positionInfoType: 'all', positionSavePrefix: 'pos', description: '元素位置' },
+      arrayOperation: { ...baseOperation, type: 'arrayOperation', arrayName: '', arrayAction: 'push', arrayValue: '', arrayIndex: '', arraySaveVariable: '', description: '数组操作' },
+      scrollToEdge: { ...baseOperation, type: 'scrollToEdge', selector: '', edgeDirection: 'bottom', edgeBehavior: 'smooth', description: '滚动到边缘' },
+      textToSpeech: { ...baseOperation, type: 'textToSpeech', ttsText: '', ttsLang: '', ttsRate: '1', ttsPitch: '1', ttsVolume: '1', ttsVoice: '', description: '文本转语音' },
+      networkStatus: { ...baseOperation, type: 'networkStatus', networkInfoType: 'all', networkSavePrefix: 'net', description: '网络状态' }
     };
 
     if (typeMap[type]) {
@@ -539,7 +590,7 @@ class OperationManager {
 
   exportConfig() {
     const config = {
-      version: '2.1.0',
+      version: '2.2.0',
       exportTime: new Date().toISOString(),
       operations: this.operations,
       repeatSettings: {
@@ -1942,6 +1993,223 @@ class OperationManager {
           </div>
           <div class="triggerevent-hint">💡 触发任意 DOM 事件；自动识别 Mouse/Keyboard/Drag/Wheel/Custom 事件类型，未知类型用 CustomEvent 触发</div>`;
         break;
+
+      case 'regexExtract':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>正则来源</label>
+              <select class="field-regexSource" data-id="${op.id}">
+                <option value="variable" ${(op.regexSource || 'variable') === 'variable' ? 'selected' : ''}>从变量读取</option>
+                <option value="text" ${op.regexSource === 'text' ? 'selected' : ''}>直接输入文本</option>
+              </select>
+            </div>
+          </div>
+          ${op.regexSource === 'text' ? `
+          <div class="field-group">
+            <label>待匹配文本 (支持变量)</label>
+            <textarea class="field-regexText" data-id="${op.id}" rows="3" placeholder="输入要匹配的文本">${this.escapeHtml(op.regexText || '')}</textarea>
+          </div>` : `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>变量名</label>
+              <input type="text" class="field-regexVariableName" data-id="${op.id}" value="${this.escapeHtml(op.regexVariableName || '')}" placeholder="responseData">
+            </div>
+          </div>`}
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>正则表达式 (无需分隔符 /.../)</label>
+              <input type="text" class="field-regexPattern" data-id="${op.id}" value="${this.escapeHtml(op.regexPattern || '')}" placeholder="(\\d+)\\.(\d+)">
+            </div>
+            <div class="field-group flex-1">
+              <label>标志位</label>
+              <input type="text" class="field-regexFlags" data-id="${op.id}" value="${this.escapeHtml(op.regexFlags || 'g')}" placeholder="g, i, m, gi...">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>捕获组索引 (0=整体匹配)</label>
+              <input type="number" class="field-regexGroupIndex" data-id="${op.id}" value="${this.escapeHtml(op.regexGroupIndex || '0')}" min="0">
+            </div>
+            <div class="field-group flex-2">
+              <label>保存到变量</label>
+              <input type="text" class="field-regexSaveVariable" data-id="${op.id}" value="${this.escapeHtml(op.regexSaveVariable || '')}" placeholder="matchedValue">
+            </div>
+          </div>
+          <div class="regexextract-hint">💡 按正则匹配文本；组索引 0 返回整体匹配，1+ 返回对应捕获组；多个匹配时返回第一项；常配合 HTTP/提取 结果使用</div>`;
+        break;
+
+      case 'elementPosition':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="#target">
+            </div>
+            <div class="field-group flex-1">
+              <label>获取信息</label>
+              <select class="field-positionInfoType" data-id="${op.id}">
+                <option value="all" ${(op.positionInfoType || 'all') === 'all' ? 'selected' : ''}>全部 (存多变量)</option>
+                <option value="x" ${op.positionInfoType === 'x' ? 'selected' : ''}>x 坐标</option>
+                <option value="y" ${op.positionInfoType === 'y' ? 'selected' : ''}>y 坐标</option>
+                <option value="width" ${op.positionInfoType === 'width' ? 'selected' : ''}>宽度</option>
+                <option value="height" ${op.positionInfoType === 'height' ? 'selected' : ''}>高度</option>
+                <option value="top" ${op.positionInfoType === 'top' ? 'selected' : ''}>顶部</option>
+                <option value="bottom" ${op.positionInfoType === 'bottom' ? 'selected' : ''}>底部</option>
+                <option value="left" ${op.positionInfoType === 'left' ? 'selected' : ''}>左侧</option>
+                <option value="right" ${op.positionInfoType === 'right' ? 'selected' : ''}>右侧</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>变量名前缀 (全部模式: 前缀_x/_y/_width/_height)</label>
+              <input type="text" class="field-positionSavePrefix" data-id="${op.id}" value="${this.escapeHtml(op.positionSavePrefix || 'pos')}" placeholder="pos">
+            </div>
+          </div>
+          <div class="elementposition-hint">💡 获取元素 BoundingRect 信息到变量；全部模式会同时保存 x/y/width/height/top/bottom/left/right 八个变量</div>`;
+        break;
+
+      case 'arrayOperation':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>数组操作</label>
+              <select class="field-arrayAction" data-id="${op.id}">
+                <option value="push" ${(op.arrayAction || 'push') === 'push' ? 'selected' : ''}>push (末尾添加)</option>
+                <option value="unshift" ${op.arrayAction === 'unshift' ? 'selected' : ''}>unshift (头部添加)</option>
+                <option value="pop" ${op.arrayAction === 'pop' ? 'selected' : ''}>pop (移除末尾)</option>
+                <option value="shift" ${op.arrayAction === 'shift' ? 'selected' : ''}>shift (移除头部)</option>
+                <option value="length" ${op.arrayAction === 'length' ? 'selected' : ''}>length (获取长度)</option>
+                <option value="join" ${op.arrayAction === 'join' ? 'selected' : ''}>join (合并为字符串)</option>
+                <option value="indexOf" ${op.arrayAction === 'indexOf' ? 'selected' : ''}>indexOf (查找索引)</option>
+                <option value="slice" ${op.arrayAction === 'slice' ? 'selected' : ''}>slice (切片)</option>
+                <option value="clear" ${op.arrayAction === 'clear' ? 'selected' : ''}>clear (清空)</option>
+              </select>
+            </div>
+            <div class="field-group flex-1">
+              <label>数组变量名</label>
+              <input type="text" class="field-arrayName" data-id="${op.id}" value="${this.escapeHtml(op.arrayName || '')}" placeholder="myList">
+            </div>
+          </div>
+          ${['push', 'unshift'].includes(op.arrayAction || 'push') ? `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>添加值 (支持变量，JSON数组则展开)</label>
+              <input type="text" class="field-arrayValue" data-id="${op.id}" value="${this.escapeHtml(op.arrayValue || '')}" placeholder="item 或 [1,2,3]">
+            </div>
+          </div>` : ''}
+          ${['join'].includes(op.arrayAction) ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>分隔符 (默认逗号)</label>
+              <input type="text" class="field-arrayValue" data-id="${op.id}" value="${this.escapeHtml(op.arrayValue || ',')}" placeholder=",">
+            </div>
+          </div>` : ''}
+          ${['indexOf', 'slice'].includes(op.arrayAction) ? `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>${op.arrayAction === 'indexOf' ? '查找值' : '起始索引'}</label>
+              <input type="text" class="field-arrayValue" data-id="${op.id}" value="${this.escapeHtml(op.arrayValue || '')}" placeholder="${op.arrayAction === 'indexOf' ? 'item' : '0'}">
+            </div>
+            ${op.arrayAction === 'slice' ? `
+            <div class="field-group flex-1">
+              <label>结束索引 (留空到末尾)</label>
+              <input type="text" class="field-arrayIndex" data-id="${op.id}" value="${this.escapeHtml(op.arrayIndex || '')}" placeholder="3">
+            </div>` : ''}
+          </div>` : ''}
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>结果保存到变量 (pop/shift/length/join/indexOf/slice)</label>
+              <input type="text" class="field-arraySaveVariable" data-id="${op.id}" value="${this.escapeHtml(op.arraySaveVariable || '')}" placeholder="resultVar">
+            </div>
+          </div>
+          <div class="arrayoperation-hint">💡 数组变量以 JSON 字符串形式存储；push/unshift 时若值是 JSON 数组则展开逐项添加</div>`;
+        break;
+
+      case 'scrollToEdge':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-2">
+              <label>元素选择器 ${pickerButton(`selector-${op.id}`)}</label>
+              <input type="text" class="field-selector" data-id="${op.id}" data-picker-target="selector-${op.id}" value="${this.escapeHtml(op.selector || '')}" placeholder="留空则对整个页面生效">
+            </div>
+            <div class="field-group flex-1">
+              <label>滚动方向</label>
+              <select class="field-edgeDirection" data-id="${op.id}">
+                <option value="top" ${op.edgeDirection === 'top' ? 'selected' : ''}>顶部 (top)</option>
+                <option value="bottom" ${(op.edgeDirection || 'bottom') === 'bottom' ? 'selected' : ''}>底部 (bottom)</option>
+                <option value="left" ${op.edgeDirection === 'left' ? 'selected' : ''}>左侧 (left)</option>
+                <option value="right" ${op.edgeDirection === 'right' ? 'selected' : ''}>右侧 (right)</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>滚动行为</label>
+              <select class="field-edgeBehavior" data-id="${op.id}">
+                <option value="smooth" ${(op.edgeBehavior || 'smooth') === 'smooth' ? 'selected' : ''}>平滑滚动</option>
+                <option value="auto" ${op.edgeBehavior === 'auto' ? 'selected' : ''}>立即跳转</option>
+              </select>
+            </div>
+          </div>
+          <div class="scrolltoedge-hint">💡 快速滚动到页面或指定容器的顶/底/左/右边缘；常用于加载更多、回到顶部等场景</div>`;
+        break;
+
+      case 'textToSpeech':
+        fields = `
+          <div class="field-group">
+            <label>朗读文本 (支持变量)</label>
+            <textarea class="field-ttsText" data-id="${op.id}" rows="3" placeholder="要朗读的文字内容">${this.escapeHtml(op.ttsText || '')}</textarea>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>语言 (如 zh-CN, en-US)</label>
+              <input type="text" class="field-ttsLang" data-id="${op.id}" value="${this.escapeHtml(op.ttsLang || '')}" placeholder="zh-CN">
+            </div>
+            <div class="field-group flex-1">
+              <label>语速 (0.1-10)</label>
+              <input type="text" class="field-ttsRate" data-id="${op.id}" value="${this.escapeHtml(op.ttsRate || '1')}" placeholder="1">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>音调 (0-2)</label>
+              <input type="text" class="field-ttsPitch" data-id="${op.id}" value="${this.escapeHtml(op.ttsPitch || '1')}" placeholder="1">
+            </div>
+            <div class="field-group flex-1">
+              <label>音量 (0-1)</label>
+              <input type="text" class="field-ttsVolume" data-id="${op.id}" value="${this.escapeHtml(op.ttsVolume || '1')}" placeholder="1">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>指定语音名称 (可选，留空自动选)</label>
+            <input type="text" class="field-ttsVoice" data-id="${op.id}" value="${this.escapeHtml(op.ttsVoice || '')}" placeholder="如 Microsoft Xiaoxiao">
+          </div>
+          <div class="texttospeech-hint">💡 使用浏览器 Web Speech API 朗读文本；首次使用需用户与页面交互过；执行下一条操作前会等待朗读完成</div>`;
+        break;
+
+      case 'networkStatus':
+        fields = `
+          <div class="field-row">
+            <div class="field-group flex-1">
+              <label>获取信息</label>
+              <select class="field-networkInfoType" data-id="${op.id}">
+                <option value="all" ${(op.networkInfoType || 'all') === 'all' ? 'selected' : ''}>全部 (存多变量)</option>
+                <option value="online" ${op.networkInfoType === 'online' ? 'selected' : ''}>在线状态 (online)</option>
+                <option value="effectiveType" ${op.networkInfoType === 'effectiveType' ? 'selected' : ''}>网络类型 (effectiveType)</option>
+                <option value="downlink" ${op.networkInfoType === 'downlink' ? 'selected' : ''}>下行带宽 (downlink)</option>
+                <option value="rtt" ${op.networkInfoType === 'rtt' ? 'selected' : ''}>往返延迟 (rtt)</option>
+                <option value="saveData" ${op.networkInfoType === 'saveData' ? 'selected' : ''}>省流模式 (saveData)</option>
+              </select>
+            </div>
+            <div class="field-group flex-2">
+              <label>变量名前缀 (全部模式: 前缀_online/_effectiveType/...)</label>
+              <input type="text" class="field-networkSavePrefix" data-id="${op.id}" value="${this.escapeHtml(op.networkSavePrefix || 'net')}" placeholder="net">
+            </div>
+          </div>
+          <div class="networkstatus-hint">💡 获取 navigator.onLine 与 Network Information API 信息；不支持 Network Information API 的浏览器相应字段为空</div>`;
+        break;
     }
 
     fields += `
@@ -2029,7 +2297,25 @@ class OperationManager {
       'field-stylePropertyValue': 'stylePropertyValue',
       'field-styleVariable': 'styleVariable',
       'field-eventType': 'eventType',
-      'field-eventInit': 'eventInit'
+      'field-eventInit': 'eventInit',
+      'field-regexText': 'regexText',
+      'field-regexVariableName': 'regexVariableName',
+      'field-regexPattern': 'regexPattern',
+      'field-regexFlags': 'regexFlags',
+      'field-regexGroupIndex': 'regexGroupIndex',
+      'field-regexSaveVariable': 'regexSaveVariable',
+      'field-positionSavePrefix': 'positionSavePrefix',
+      'field-arrayName': 'arrayName',
+      'field-arrayValue': 'arrayValue',
+      'field-arrayIndex': 'arrayIndex',
+      'field-arraySaveVariable': 'arraySaveVariable',
+      'field-ttsText': 'ttsText',
+      'field-ttsLang': 'ttsLang',
+      'field-ttsRate': 'ttsRate',
+      'field-ttsPitch': 'ttsPitch',
+      'field-ttsVolume': 'ttsVolume',
+      'field-ttsVoice': 'ttsVoice',
+      'field-networkSavePrefix': 'networkSavePrefix'
     };
 
     Object.entries(fieldMap).forEach(([cls, prop]) => {
@@ -2224,6 +2510,36 @@ class OperationManager {
       });
     });
 
+    document.querySelectorAll('.field-regexSource').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'regexSource', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-positionInfoType').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'positionInfoType', e.target.value));
+    });
+
+    document.querySelectorAll('.field-arrayAction').forEach(s => {
+      s.addEventListener('change', (e) => {
+        this.updateOperation(parseInt(e.target.dataset.id), 'arrayAction', e.target.value);
+        this.renderOperations();
+      });
+    });
+
+    document.querySelectorAll('.field-edgeDirection').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'edgeDirection', e.target.value));
+    });
+
+    document.querySelectorAll('.field-edgeBehavior').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'edgeBehavior', e.target.value));
+    });
+
+    document.querySelectorAll('.field-networkInfoType').forEach(s => {
+      s.addEventListener('change', (e) => this.updateOperation(parseInt(e.target.dataset.id), 'networkInfoType', e.target.value));
+    });
+
     ['field-eventBubbles', 'field-eventCancelable'].forEach(cls => {
       document.querySelectorAll(`.${cls}`).forEach(cb => {
         cb.addEventListener('change', (e) => {
@@ -2287,7 +2603,8 @@ class OperationManager {
       rightClick: '🖱', focus: '🎯', clear: '🧹', scrollToElement: '📍',
       drag: '🤚', mouseWheel: '🎰', log: '📜', hideElement: '🙈', jsonExtract: '🔧',
       switchIframe: '🖼', elementCount: '🔢', fileDownload: '⬇', pageInfo: '📄',
-      elementStyle: '🎨', triggerEvent: '🎉'
+      elementStyle: '🎨', triggerEvent: '🎉', regexExtract: '🔬', elementPosition: '📐',
+      arrayOperation: '📚', scrollToEdge: '⏫', textToSpeech: '🔊', networkStatus: '📡'
     };
     return icons[type] || '❓';
   }
@@ -2322,7 +2639,7 @@ class OperationManager {
   }
 
   showHelp() {
-    alert(`📖 使用帮助 v2.1.0
+    alert(`📖 使用帮助 v2.2.0
 
 【操作类型】
 📝 输入       - 填写表单内容 (支持变量)
@@ -2364,6 +2681,12 @@ class OperationManager {
 📄 页面信息   - 获取 URL/标题/域名/UA 等到变量
 🎨 元素样式   - 设置/获取/移除元素 CSS 样式
 🎉 触发事件   - 触发任意 DOM 事件 (含自定义事件)
+🔬 正则提取   - 用正则表达式从文本/变量提取内容
+📐 元素位置   - 获取元素 BoundingRect 坐标/尺寸到变量
+📚 数组操作   - push/pop/shift/unshift/length/join/indexOf/slice/clear
+⏫ 滚动到边缘 - 快速滚动到顶/底/左/右边缘
+🔊 文本转语音 - 用 Web Speech API 朗读文本
+📡 网络状态   - 获取在线状态/网络类型/带宽/延迟到变量
 
 【等待操作详解】
 - 固定时长：等待 N 毫秒
@@ -2424,6 +2747,52 @@ search / hash / userAgent / language
 - 基础事件: input, change, submit, focus, blur, load, scroll, resize...
 - 其他类型: 使用 CustomEvent 触发 (可携带 detail 数据)
 事件初始化参数为 JSON 格式，留空则使用默认值
+
+【正则提取详解】
+- 来源：从变量读取 / 直接输入文本
+- 正则表达式：无需 /.../ 分隔符，直接写正则
+- 标志位：g (全局) / i (忽略大小写) / m (多行) 等
+- 捕获组索引：0=整体匹配，1+ 对应捕获组
+- 多个匹配时返回第一项；可保存到变量
+- 常配合 HTTP 请求结果、提取操作使用
+
+【元素位置详解】
+获取元素 getBoundingClientRect() 信息：
+- 全部模式：同时保存 x/y/width/height/top/bottom/left/right 八个变量
+  变量名 = 前缀 + '_' + 字段名 (如 pos_x, pos_y)
+- 单字段模式：仅保存指定字段到前缀变量
+常配合拖拽、点击、滚动定位使用
+
+【数组操作详解】
+数组变量以 JSON 字符串形式存储在变量中
+- push/unshift：末尾/头部添加；若值是 JSON 数组则展开逐项添加
+- pop/shift：移除末尾/头部，被移除项可保存到变量
+- length：获取长度到变量
+- join：用分隔符合并为字符串，可保存到变量
+- indexOf：查找元素索引 (-1 表示未找到)，可保存到变量
+- slice：切片 (起始索引, 结束索引)，结果可保存到变量
+- clear：清空数组
+
+【滚动到边缘详解】
+快速滚动到顶/底/左/右边缘
+- 可指定元素选择器，对该元素内部滚动
+- 留空选择器则对整个页面滚动
+- 常用于加载更多、回到顶部、横向滚动等场景
+
+【文本转语音详解】
+使用浏览器 Web Speech API (speechSynthesis) 朗读文本
+- 语言：zh-CN / en-US 等，留空自动选择
+- 语速 0.1-10，音调 0-2，音量 0-1
+- 可指定语音名称 (如 Microsoft Xiaoxiao)
+- 执行下一条操作前会等待朗读完成
+- 首次使用需用户已与页面交互过 (浏览器限制)
+
+【网络状态详解】
+获取 navigator.onLine 与 Network Information API 信息
+- 全部模式：同时保存 online/effectiveType/downlink/rtt/saveData 多个变量
+  变量名 = 前缀 + '_' + 字段名 (如 net_online, net_rtt)
+- 单字段模式：仅保存指定字段到前缀变量
+- 不支持 Network Information API 的浏览器相应字段为空
 
 【元素拾取器】
 点击 🎯 按钮可进入拾取模式
