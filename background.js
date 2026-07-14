@@ -55,6 +55,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'openTab') {
+    // URL 协议校验：仅允许 http/https，防止 javascript:/data:/file: 等危险协议
+    try {
+      const parsed = new URL(request.url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        sendResponse({ success: false, error: '仅允许 http/https 协议' });
+        return true;
+      }
+    } catch (e) {
+      sendResponse({ success: false, error: '无效的 URL' });
+      return true;
+    }
     chrome.tabs.create({ url: request.url }, (tab) => {
       sendResponse({ tab });
     });
@@ -76,9 +87,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.storage.local.get(['storedData'], (result) => {
       const storedData = result.storedData || {};
       storedData[request.key] = request.value;
-      chrome.storage.local.set({ storedData });
+      // 确保 sendResponse 在存储写入完成后调用，避免响应先于写入完成导致数据不一致
+      chrome.storage.local.set({ storedData }, () => {
+        sendResponse({ success: true });
+      });
     });
-    sendResponse({ success: true });
     return true;
   }
 
@@ -107,7 +120,8 @@ chrome.commands.onCommand.addListener(async (command) => {
     if (command === 'execute-operations') {
       // 获取已保存的操作并发送到 popup (popup 监听消息触发执行)
       // 直接向 popup 发送消息触发执行
-      const popupViews = chrome.extension.getViews({ type: 'popup' });
+      // 获取已打开的 popup 视图（chrome.extension.getViews 已废弃，使用 chrome.runtime.getViews）
+      const popupViews = chrome.runtime.getViews({ type: 'popup' });
       if (popupViews && popupViews.length > 0) {
         // popup 已打开，可直接通过 postMessage 触发
         try {
@@ -164,13 +178,63 @@ chrome.commands.onCommand.addListener(async (command) => {
 // version is available. Runs on install/update and every 24 hours via alarm.
 
 function compareVersions(v1, v2) {
-  const a = v1.replace(/^v/, "").split(".");
-  const b = v2.replace(/^v/, "").split(".");
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const na = parseInt(a[i] || 0, 10);
-    const nb = parseInt(b[i] || 0, 10);
+  // 解析版本号，分离主版本号与预发布后缀（如 1.0.0-beta.1 -> 主版本 [1,0,0]，后缀 ['beta',1]）
+  // 正式版优先级高于预发布版（1.0.0 > 1.0.0-beta）
+  const parseVersion = (v) => {
+    const clean = v.replace(/^v/, "");
+    const dashIdx = clean.indexOf("-");
+    const main = dashIdx >= 0 ? clean.slice(0, dashIdx) : clean;
+    const pre = dashIdx >= 0 ? clean.slice(dashIdx + 1) : null;
+    const parts = main.split(".").map(n => parseInt(n, 10) || 0);
+    // preParts 为 null 表示正式版（优先级最高），否则为数组
+    let preParts = null;
+    if (pre !== null && pre !== "") {
+      preParts = pre.split(".").map(p => {
+        const num = parseInt(p, 10);
+        return isNaN(num) ? p : num;
+      });
+    }
+    return { parts, preParts };
+  };
+
+  const a = parseVersion(v1);
+  const b = parseVersion(v2);
+
+  // 先比较主版本号
+  for (let i = 0; i < Math.max(a.parts.length, b.parts.length); i++) {
+    const na = a.parts[i] || 0;
+    const nb = b.parts[i] || 0;
     if (na > nb) return 1;
     if (na < nb) return -1;
+  }
+
+  // 主版本号相同，比较预发布后缀
+  // 正式版（preParts 为 null）优先级高于预发布版
+  if (a.preParts === null && b.preParts !== null) return 1;
+  if (a.preParts !== null && b.preParts === null) return -1;
+  if (a.preParts === null && b.preParts === null) return 0;
+
+  // 均为预发布版，逐段比较
+  for (let i = 0; i < Math.max(a.preParts.length, b.preParts.length); i++) {
+    const pa = a.preParts[i];
+    const pb = b.preParts[i];
+    // 缺失段视为较低优先级
+    if (pa === undefined && pb !== undefined) return -1;
+    if (pa !== undefined && pb === undefined) return 1;
+    if (pa === undefined && pb === undefined) return 0;
+    // 数字优先级高于字符串标识（1.0.0-beta.1 > 1.0.0-beta）
+    if (typeof pa === "number" && typeof pb === "number") {
+      if (pa > pb) return 1;
+      if (pa < pb) return -1;
+    } else if (typeof pa === "number" && typeof pb === "string") {
+      return 1;
+    } else if (typeof pa === "string" && typeof pb === "number") {
+      return -1;
+    } else {
+      // 均为字符串，按字典序比较
+      if (pa > pb) return 1;
+      if (pa < pb) return -1;
+    }
   }
   return 0;
 }

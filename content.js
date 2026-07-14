@@ -17,6 +17,8 @@ class SkipIterationError extends Error {
   }
 }
 
+// ==================== 主执行器类定义与构造函数 ====================
+
 class OperationExecutor {
   constructor() {
     this.shouldStop = false;
@@ -55,11 +57,15 @@ class OperationExecutor {
           }
           this.executeOperations(request.operations, request.repeatInfo)
             .then(() => sendResponse({ success: true }))
-            .catch(error => sendResponse({
-              success: false,
-              error: error.message,
-              shouldStop: this.shouldStop
-            }));
+            .catch(error => {
+              // 对外返回通用错误消息，避免泄露内部实现细节；详细错误仅记录到控制台
+              console.error('操作执行失败:', error);
+              sendResponse({
+                success: false,
+                error: '操作执行失败',
+                shouldStop: this.shouldStop
+              });
+            });
           return true;
 
         case 'stopExecution':
@@ -233,6 +239,8 @@ class OperationExecutor {
     this.stopElementPicker();
   }
 
+  // ==================== 元素选择器生成与路径解析 ====================
+
   generateSelector(element) {
     // 优先使用 ID
     if (element.id) {
@@ -298,15 +306,28 @@ class OperationExecutor {
   // ==================== 操作执行引擎 ====================
 
   async executeOperations(operations, repeatInfo) {
+    // 参数校验：确保操作列表为有效数组
+    if (!Array.isArray(operations)) {
+      console.error('操作列表参数无效，必须是数组');
+      throw new Error('操作列表必须是数组');
+    }
     // 空操作数组直接返回，避免无意义执行
-    if (!operations || operations.length === 0) {
+    if (operations.length === 0) {
       console.warn('⚠️ 操作列表为空，跳过执行');
       return;
+    }
+    // 校验每个操作的基本结构（必须包含 type 字段）
+    for (let i = 0; i < operations.length; i++) {
+      const op = operations[i];
+      if (!op || typeof op !== 'object' || !op.type) {
+        console.error(`第 ${i + 1} 个操作格式无效:`, op);
+        throw new Error(`第 ${i + 1} 个操作缺少 type 字段或格式无效`);
+      }
     }
 
     if (repeatInfo) {
       const totalStr = repeatInfo.total > 0 ? repeatInfo.total : '∞';
-      console.log(`🔄 第 ${repeatInfo.current}/${totalStr} 次执行`);
+      console.info(`🔄 第 ${repeatInfo.current}/${totalStr} 次执行`);
       if (repeatInfo.loopIndex) {
         this.loopIndex = repeatInfo.loopIndex;
       }
@@ -318,15 +339,15 @@ class OperationExecutor {
       }
 
       const op = operations[i];
-      console.log(`📌 [${i + 1}/${operations.length}] ${op.type}: ${op.description || ''}`);
+      console.debug(`📌 [${i + 1}/${operations.length}] ${op.type}: ${op.description || ''}`);
 
       try {
         await this.executeOperation(op);
-        console.log(`✅ 操作 ${i + 1} 完成`);
+        console.debug(`✅ 操作 ${i + 1} 完成`);
       } catch (error) {
         // 条件判断操作抛出跳过信号：结束当前迭代但不算失败
         if (error instanceof SkipIterationError) {
-          console.log(`⏭ 跳过当前迭代: ${error.message}`);
+          console.info(`⏭ 跳过当前迭代: ${error.message}`);
           return { skipped: true, reason: error.message };
         }
         console.error(`❌ 操作 ${i + 1} 失败:`, error);
