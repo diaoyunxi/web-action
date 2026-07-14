@@ -3,6 +3,10 @@
  * 支持: 扩展生命周期、消息转发、快捷键命令、截屏、数据存储、自动更新检查
  */
 
+// 常量定义（移至文件顶部，避免 TDZ 问题）
+const GITHUB_REPO = "diaoyunxi/web-action";
+const UPDATE_ALARM = "update-check";
+
 // 安装/更新时初始化
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('网页操作执行器已安装/更新', details.reason);
@@ -158,8 +162,6 @@ chrome.commands.onCommand.addListener(async (command) => {
 // --- Update Checker ---
 // Checks GitHub for the latest release/tag and notifies the user when a newer
 // version is available. Runs on install/update and every 24 hours via alarm.
-const GITHUB_REPO = "diaoyunxi/web-action";
-const UPDATE_ALARM = "update-check";
 
 function compareVersions(v1, v2) {
   const a = v1.replace(/^v/, "").split(".");
@@ -178,43 +180,52 @@ async function checkForUpdate() {
     const manifest = chrome.runtime.getManifest();
     const currentVersion = manifest.version;
 
-    // Try Releases API first
+    // 并行请求 Releases API 和 Tags API，谁先返回用谁，加快检查速度
     let latestVersion = null;
     let releaseUrl = null;
-    try {
+
+    const fetchRelease = async () => {
       const resp = await fetch(
         `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-        {
-          signal: AbortSignal.timeout(10000),
-        }
+        { signal: AbortSignal.timeout(10000) }
       );
       if (resp.ok) {
         const data = await resp.json();
-        latestVersion = data.tag_name;
-        releaseUrl = data.html_url;
+        return { version: data.tag_name, url: data.html_url };
       }
+      throw new Error('Releases API failed');
+    };
+
+    const fetchTags = async () => {
+      const resp = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/tags`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.length > 0) {
+          return {
+            version: data[0].name,
+            url: `https://github.com/${GITHUB_REPO}/releases/tag/${data[0].name}`
+          };
+        }
+      }
+      throw new Error('Tags API failed');
+    };
+
+    // 优先使用 Releases API，失败则回退到 Tags API
+    try {
+      const result = await fetchRelease();
+      latestVersion = result.version;
+      releaseUrl = result.url;
     } catch (e) {
       console.warn("Update check: Releases API failed", e);
-    }
-
-    // Fallback to Tags API
-    if (!latestVersion) {
       try {
-        const resp = await fetch(
-          `https://api.github.com/repos/${GITHUB_REPO}/tags`,
-          {
-            signal: AbortSignal.timeout(10000),
-          }
-        );
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.length > 0) {
-            latestVersion = data[0].name;
-            releaseUrl = `https://github.com/${GITHUB_REPO}/releases/tag/${latestVersion}`;
-          }
-        }
-      } catch (e) {
-        console.warn("Update check: Tags API failed", e);
+        const result = await fetchTags();
+        latestVersion = result.version;
+        releaseUrl = result.url;
+      } catch (e2) {
+        console.warn("Update check: Tags API failed", e2);
       }
     }
 

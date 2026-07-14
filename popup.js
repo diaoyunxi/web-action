@@ -97,15 +97,22 @@ class OperationManager {
   }
 
   async saveLogs() {
-    try {
-      // 只保留最近 100 条日志
-      if (this.logs.length > 100) {
-        this.logs = this.logs.slice(-100);
-      }
-      await chrome.storage.local.set({ executionLogs: this.logs });
-    } catch (error) {
-      console.error('保存日志失败:', error);
+    // 使用防抖：多次添加日志合并为一次写入，减少 storage I/O
+    if (this._saveLogsTimer) {
+      clearTimeout(this._saveLogsTimer);
     }
+    this._saveLogsTimer = setTimeout(async () => {
+      try {
+        // 只保留最近 100 条日志
+        if (this.logs.length > 100) {
+          this.logs = this.logs.slice(-100);
+        }
+        await chrome.storage.local.set({ executionLogs: this.logs });
+      } catch (error) {
+        console.error('保存日志失败:', error);
+      }
+      this._saveLogsTimer = null;
+    }, 300);
   }
 
   addLog(type, message) {
@@ -450,14 +457,26 @@ class OperationManager {
   async sendMessageWithRetry(tabId, message, maxRetries = 5, retryDelay = 500) {
     let lastError;
 
+    // 需要重试的连接错误类型
+    const retryableErrors = [
+      'Receiving end does not exist',
+      'Could not establish connection',
+      'The message port closed before a response was received',
+      'No tab with id',
+      'Extension context invalidated'
+    ];
+
     for (let i = 0; i < maxRetries; i++) {
       try {
         const response = await chrome.tabs.sendMessage(tabId, message);
         return response;
       } catch (error) {
         lastError = error;
-        if (error.message.includes('Receiving end does not exist')) {
-          console.log(`连接失败 (${i + 1}/${maxRetries})，正在重试...`);
+        const isRetryable = retryableErrors.some(msg =>
+          error.message && error.message.includes(msg)
+        );
+        if (isRetryable) {
+          console.log(`连接失败 (${i + 1}/${maxRetries})，正在重试...`, error.message);
           await this.sleep(retryDelay);
         } else {
           throw error;
@@ -628,17 +647,53 @@ class OperationManager {
         const config = JSON.parse(e.target.result);
 
         if (!config.operations || !Array.isArray(config.operations)) {
-          throw new Error('无效的配置文件');
+          throw new Error('无效的配置文件：缺少 operations 数组');
         }
 
-        if (!confirm(`将导入 ${config.operations.length} 个操作，是否覆盖当前配置？`)) {
+        // 配置校验：验证版本兼容性
+        if (config.version) {
+          const configVer = config.version.replace(/^v/, '').split('.')[0];
+          const currentVer = '2.2.0'.split('.')[0];
+          if (parseInt(configVer) > parseInt(currentVer)) {
+            throw new Error(`配置版本 (${config.version}) 高于当前扩展版本，可能不兼容`);
+          }
+        }
+
+        // 操作类型白名单，防止注入非法操作类型
+        const validTypes = new Set([
+          'input', 'click', 'scroll', 'refresh', 'wait', 'select',
+          'script', 'extract', 'keyboard', 'screenshot', 'clipboard',
+          'httpRequest', 'tab', 'notification', 'cookie', 'hover',
+          'doubleClick', 'if', 'fileUpload', 'setVariable', 'setAttribute',
+          'storage', 'navigate', 'mediaControl', 'rightClick', 'focus',
+          'clear', 'scrollToElement', 'drag', 'mouseWheel', 'log',
+          'hideElement', 'jsonExtract', 'switchIframe', 'elementCount',
+          'fileDownload', 'pageInfo', 'elementStyle', 'triggerEvent',
+          'regexExtract', 'elementPosition', 'arrayOperation',
+          'scrollToEdge', 'textToSpeech', 'networkStatus'
+        ]);
+
+        const validOps = config.operations.filter(op =>
+          op && typeof op === 'object' && validTypes.has(op.type)
+        );
+
+        if (validOps.length === 0) {
+          throw new Error('配置文件中没有有效的操作');
+        }
+
+        const skipped = config.operations.length - validOps.length;
+        if (skipped > 0) {
+          console.warn(`导入时跳过了 ${skipped} 个无效操作`);
+        }
+
+        if (!confirm(`将导入 ${validOps.length} 个操作，是否覆盖当前配置？${skipped > 0 ? `（已跳过 ${skipped} 个无效操作）` : ''}`)) {
           event.target.value = '';
           return;
         }
 
-        this.operations = config.operations.map(op => ({
+        this.operations = validOps.map(op => ({
           ...op,
-          id: Date.now() + Math.floor(Math.random() * 1000) + op.id
+          id: Date.now() + Math.floor(Math.random() * 1000) + (op.id || 0)
         }));
         this.saveOperations();
 
@@ -707,12 +762,20 @@ class OperationManager {
 
     if (document.getElementById('showProgress').checked) {
       container.style.display = 'block';
-      document.getElementById('progressText').textContent =
-        total === -1 ? '无限循环中...' : '执行中...';
-      document.getElementById('progressCount').textContent =
-        total === -1 ? `${current}/∞` : `${current}/${total}`;
-      document.getElementById('progressFill').style.width =
-        total === -1 ? '100%' : `${(current / total) * 100}%`;
+      if (total === -1) {
+        // 无限循环模式：使用脉冲动画效果替代固定百分比
+        document.getElementById('progressText').textContent = '无限循环中...';
+        document.getElementById('progressCount').textContent = `${current}/∞`;
+        const progressFill = document.getElementById('progressFill');
+        progressFill.style.width = '100%';
+        progressFill.classList.add('progress-pulse');
+      } else {
+        document.getElementById('progressText').textContent = '执行中...';
+        document.getElementById('progressCount').textContent = `${current}/${total}`;
+        const progressFill = document.getElementById('progressFill');
+        progressFill.style.width = `${(current / total) * 100}%`;
+        progressFill.classList.remove('progress-pulse');
+      }
     }
   }
 
@@ -980,11 +1043,11 @@ class OperationManager {
       <div class="operation-item" draggable="true" data-id="${op.id}">
         <div class="operation-header">
           <span class="operation-number">#${index + 1}</span>
-          <span class="operation-type type-${op.type}">${this.getIcon(op.type)} ${op.description}</span>
+          <span class="operation-type type-${op.type}">${this.getIcon(op.type)} ${this.escapeHtml(op.description || '')}</span>
           <div class="operation-controls">
-            <button class="btn-icon-only" onclick="manager.moveOperation(${op.id}, 'up')" ${index === 0 ? 'disabled' : ''} title="上移">↑</button>
-            <button class="btn-icon-only" onclick="manager.moveOperation(${op.id}, 'down')" ${index === this.operations.length - 1 ? 'disabled' : ''} title="下移">↓</button>
-            <button class="btn-icon-only btn-delete" onclick="manager.deleteOperation(${op.id})" title="删除">✕</button>
+            <button class="btn-icon-only btn-move-up" data-id="${op.id}" ${index === 0 ? 'disabled' : ''} title="上移">↑</button>
+            <button class="btn-icon-only btn-move-down" data-id="${op.id}" ${index === this.operations.length - 1 ? 'disabled' : ''} title="下移">↓</button>
+            <button class="btn-icon-only btn-delete" data-id="${op.id}" title="删除">✕</button>
           </div>
         </div>
         <div class="operation-content">
@@ -995,13 +1058,44 @@ class OperationManager {
 
     this.addFieldListeners();
     this.initDragDrop();
+    this.initOperationControls();
+  }
+
+  // 绑定操作项控制按钮事件（上移、下移、删除），替代内联 onclick
+  initOperationControls() {
+    document.querySelectorAll('.btn-move-up').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = parseInt(e.currentTarget.dataset.id);
+        this.moveOperation(id, 'up');
+      });
+    });
+    document.querySelectorAll('.btn-move-down').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = parseInt(e.currentTarget.dataset.id);
+        this.moveOperation(id, 'down');
+      });
+    });
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = parseInt(e.currentTarget.dataset.id);
+        this.deleteOperation(id);
+      });
+    });
+    // 绑定拾取器按钮事件
+    document.querySelectorAll('.btn-picker').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const fieldId = e.currentTarget.dataset.field;
+        this.startPicker(fieldId);
+      });
+    });
   }
 
   renderFields(op) {
     let fields = '';
 
     const pickerButton = (fieldId) => `
-      <button class="btn-picker" onclick="manager.startPicker('${fieldId}')" title="点击拾取页面元素">
+      <button class="btn-picker" data-field="${fieldId}" title="点击拾取页面元素">
         🎯
       </button>`;
 
@@ -2633,9 +2727,17 @@ class OperationManager {
 
   escapeHtml(text) {
     if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
+    const str = String(text);
+    // 完整的 HTML 转义，覆盖 < > " ' & / ` = 等危险字符
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/`/g, '&#96;')
+      .replace(/\//g, '&#x2F;')
+      .replace(/=/g, '&#x3D;');
   }
 
   showHelp() {

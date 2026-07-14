@@ -1,5 +1,61 @@
 /* ==================== 基础样式 v2.2.0 ==================== */
 
+/* CSS 变量 - 主题色系统 */
+:root {
+  /* 主色调 */
+  --color-primary: #2196F3;
+  --color-primary-dark: #1976D2;
+  --color-success: #4CAF50;
+  --color-success-dark: #388E3C;
+  --color-warning: #FF9800;
+  --color-warning-dark: #F57C00;
+  --color-danger: #F44336;
+  --color-danger-dark: #D32F2F;
+  --color-info: #00BCD4;
+
+  /* 中性色 */
+  --color-text: #333;
+  --color-text-secondary: #666;
+  --color-text-muted: #999;
+  --color-text-light: #bbb;
+  --color-bg: #f8f9fa;
+  --color-bg-card: #ffffff;
+  --color-border: #e0e0e0;
+  --color-border-light: #e8e8e8;
+  --color-border-lighter: #f0f0f0;
+
+  /* 尺寸 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  /* 间距 */
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --space-lg: 12px;
+  --space-xl: 16px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.12);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.3);
+
+  /* 字体 */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 18px;
+
+  /* 过渡 */
+  --transition-fast: all 0.2s;
+  --transition-normal: all 0.3s ease;
+  --transition-slow: all 0.4s ease;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -8,10 +64,10 @@
 
 body {
   width: 480px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: #f8f9fa;
-  color: #333;
-  font-size: 13px;
+  font-family: var(--font-family);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
 }
 
 .container {
@@ -332,8 +388,14 @@ body {
 .controls {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.controls .btn {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .btn {
@@ -451,6 +513,23 @@ body {
   border-radius: 3px;
   transition: width 0.4s ease;
   width: 0%;
+}
+
+/* 无限循环模式下的脉冲动画效果 */
+.progress-fill.progress-pulse {
+  animation: progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
 }
 
 /* ==================== 状态消息 ==================== */

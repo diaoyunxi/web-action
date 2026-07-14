@@ -298,6 +298,12 @@ class OperationExecutor {
   // ==================== 操作执行引擎 ====================
 
   async executeOperations(operations, repeatInfo) {
+    // 空操作数组直接返回，避免无意义执行
+    if (!operations || operations.length === 0) {
+      console.warn('⚠️ 操作列表为空，跳过执行');
+      return;
+    }
+
     if (repeatInfo) {
       const totalStr = repeatInfo.total > 0 ? repeatInfo.total : '∞';
       console.log(`🔄 第 ${repeatInfo.current}/${totalStr} 次执行`);
@@ -476,16 +482,26 @@ class OperationExecutor {
   }
 
   dispatchInputEvents(element, value) {
-    ['input', 'change'].forEach(eventType => {
-      element.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
-    });
-
-    const nativeSetter = Object.getOwnPropertyDescriptor(
+    // 先尝试通过原生 setter 设置值（兼容 React/Vue 等框架受控组件）
+    const inputNativeSetter = Object.getOwnPropertyDescriptor(
       window.HTMLInputElement.prototype, 'value'
     )?.set;
+    const textareaNativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLTextAreaElement.prototype, 'value'
+    )?.set;
+    const nativeSetter = inputNativeSetter || textareaNativeSetter;
+
     if (nativeSetter) {
       nativeSetter.call(element, value);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
+      // 原生 setter 后同时派发 input 和 change 事件，确保框架受控组件感知变更
+      element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    } else {
+      // fallback: 直接设置值并派发事件
+      element.value = value;
+      ['input', 'change'].forEach(eventType => {
+        element.dispatchEvent(new Event(eventType, { bubbles: true, cancelable: true }));
+      });
     }
   }
 
@@ -666,12 +682,13 @@ class OperationExecutor {
     }
   }
 
-  // 将 HH:MM:SS[.mmm] 格式的时刻转换为距离当前时刻的毫秒数
+  // 将 HH:MM:SS[.mmm] 或 HH:MM 格式的时刻转换为距离当前时刻的毫秒数
   // 若该时刻今天已过，则计算到明天同时刻的毫秒数
+  // 支持格式: HH:MM, HH:MM:SS, HH:MM:SS.mmm
   parseScheduledTimeToDelay(timeStr) {
     const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?$/);
     if (!match) {
-      throw new Error(`定时时间格式无效: ${timeStr}，正确格式为 HH:MM:SS 或 HH:MM:SS.mmm`);
+      throw new Error(`定时时间格式无效: ${timeStr}，正确格式为 HH:MM、HH:MM:SS 或 HH:MM:SS.mmm`);
     }
     const hours = parseInt(match[1], 10);
     const minutes = parseInt(match[2], 10);
@@ -698,12 +715,15 @@ class OperationExecutor {
   // 支持停止检查的长时间 sleep
   async sleepWithStopCheck(ms) {
     if (ms <= 0) return;
-    const step = 200;
+    // 步长自适应：剩余时间越长，步长越大，减少循环次数
+    // 1分钟以内用 200ms 步长，1分钟以上用 1000ms 步长
     let remaining = ms;
     while (remaining > 0) {
       if (this.shouldStop) {
         throw new Error('用户停止执行');
       }
+      // 根据剩余时间动态调整步长
+      const step = remaining > 60000 ? 1000 : 200;
       const wait = Math.min(step, remaining);
       await this.sleep(wait);
       remaining -= wait;
@@ -794,34 +814,33 @@ class OperationExecutor {
     const processedScript = this.substituteVariables(scriptCode);
 
     try {
-      // 创建执行上下文
-      const context = {
-        loopIndex: this.loopIndex || 1,
-        document: document,
-        window: window,
-        selector: operation.selector || '',
-        findElement: (sel) => this.findElement(sel),
-        sleep: (ms) => this.sleep(ms)
-      };
+      // 使用严格模式 + 显式参数传递，移除 with 语句以保证作用域安全
+      // 仅向用户脚本暴露有限的 API：findElement、sleep、loopIndex、selector
+      const fn = new Function(
+        'findElement', 'sleep', 'loopIndex', 'selector',
+        `'use strict';\n${processedScript}`
+      );
 
-      // 使用 Function 构造器执行脚本
-      const fn = new Function('context', `
-        with(context) {
-          ${processedScript}
-        }
-      `);
-
-      const result = fn(context);
+      const result = await fn(
+        (sel) => this.findElement(sel),
+        (ms) => this.sleep(ms),
+        this.loopIndex || 1,
+        operation.selector || ''
+      );
 
       console.log('✅ 脚本执行完成', result !== undefined ? `结果: ${result}` : '');
-      
-      // 如果脚本返回值，发送到 popup
+
+      // 如果脚本返回值，发送到 popup（添加错误处理）
       if (result !== undefined && result !== null) {
-        chrome.runtime.sendMessage({
-          action: 'scriptResult',
-          result: String(result),
-          operationId: operation.id
-        });
+        try {
+          chrome.runtime.sendMessage({
+            action: 'scriptResult',
+            result: String(result),
+            operationId: operation.id
+          });
+        } catch (sendErr) {
+          console.warn('发送脚本结果失败:', sendErr.message);
+        }
       }
 
     } catch (error) {
@@ -924,18 +943,51 @@ class OperationExecutor {
     const options = { key, code: this.getEventCode(key), bubbles: true, cancelable: true };
     if (modifiers.length > 0) options.modifiers = modifiers;
 
-    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', options));
-    document.activeElement.dispatchEvent(new KeyboardEvent('keyup', { ...options }));
+    // 确保目标元素存在：activeElement 可能为 null（如页面未聚焦）
+    const target = document.activeElement || document.body;
+    target.dispatchEvent(new KeyboardEvent('keydown', options));
+    target.dispatchEvent(new KeyboardEvent('keyup', { ...options }));
     console.log(`⌨️ 按键: ${key}`);
   }
 
   normalizeKey(key) {
-    const map = { 'enter':'Enter','tab':'Tab','escape':'Escape','esc':'Escape','backspace':'Backspace','delete':'Delete','arrowup':'ArrowUp','arrowdown':'ArrowDown','arrowleft':'ArrowLeft','arrowright':'ArrowRight','home':'Home','end':'End','pageup':'PageUp','pagedown':'PageDown',' ':'Space' };
+    const map = {
+      'enter': 'Enter',
+      'tab': 'Tab',
+      'escape': 'Escape',
+      'esc': 'Escape',
+      'backspace': 'Backspace',
+      'delete': 'Delete',
+      'arrowup': 'ArrowUp',
+      'arrowdown': 'ArrowDown',
+      'arrowleft': 'ArrowLeft',
+      'arrowright': 'ArrowRight',
+      'home': 'Home',
+      'end': 'End',
+      'pageup': 'PageUp',
+      'pagedown': 'PageDown',
+      ' ': 'Space'
+    };
     return map[key.toLowerCase()] || key;
   }
 
   getEventCode(key) {
-    const map = { 'Enter':'Enter','Tab':'Tab','Escape':'Escape','Backspace':'Backspace','Delete':'Delete','ArrowUp':'ArrowUp','ArrowDown':'ArrowDown','ArrowLeft':'ArrowLeft','ArrowRight':'ArrowRight','Home':'Home','End':'End','PageUp':'PageUp','PageDown':'PageDown',' ':'Space' };
+    const map = {
+      'Enter': 'Enter',
+      'Tab': 'Tab',
+      'Escape': 'Escape',
+      'Backspace': 'Backspace',
+      'Delete': 'Delete',
+      'ArrowUp': 'ArrowUp',
+      'ArrowDown': 'ArrowDown',
+      'ArrowLeft': 'ArrowLeft',
+      'ArrowRight': 'ArrowRight',
+      'Home': 'Home',
+      'End': 'End',
+      'PageUp': 'PageUp',
+      'PageDown': 'PageDown',
+      ' ': 'Space'
+    };
     if (map[key]) return map[key];
     if (key.length === 1) return `Key${key.toUpperCase()}`;
     return key;
@@ -948,8 +1000,18 @@ class OperationExecutor {
 
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({ action: 'captureScreenshot' }, (response) => {
+        // 处理 chrome.runtime.lastError
+        if (chrome.runtime.lastError) {
+          reject(new Error(`截屏请求失败: ${chrome.runtime.lastError.message}`));
+          return;
+        }
         if (response && response.success) {
-          chrome.runtime.sendMessage({ action: 'screenshotResult', dataUrl: response.dataUrl, type: screenshotType });
+          chrome.runtime.sendMessage({ action: 'screenshotResult', dataUrl: response.dataUrl, type: screenshotType }, () => {
+            // 忽略发送失败的错误
+            if (chrome.runtime.lastError) {
+              console.warn('发送截屏结果失败:', chrome.runtime.lastError.message);
+            }
+          });
           console.log(`📷 截屏完成 (${screenshotType})`);
           resolve();
         } else {
@@ -1004,9 +1066,31 @@ class OperationExecutor {
       fetchOptions.body = this.substituteVariables(operation.httpBody);
     }
 
+    // 响应体大小限制（5MB）
+    const MAX_RESPONSE_SIZE = 5 * 1024 * 1024;
+    // 请求超时时间（30秒）
+    const REQUEST_TIMEOUT = 30000;
+
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+      fetchOptions.signal = controller.signal;
+
       const response = await fetch(url, fetchOptions);
+      clearTimeout(timeoutId);
+
+      // 限制响应体大小，防止内存溢出
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE) {
+        throw new Error(`响应体过大: ${contentLength} 字节，超过限制 ${MAX_RESPONSE_SIZE} 字节`);
+      }
+
       const text = await response.text();
+
+      if (text.length > MAX_RESPONSE_SIZE) {
+        throw new Error(`响应体过大: ${text.length} 字节，超过限制 ${MAX_RESPONSE_SIZE} 字节`);
+      }
+
       const preview = text.substring(0, 200);
       console.log(`🌐 HTTP ${method} ${url} -> ${response.status} (${preview}...)`);
 
@@ -1027,6 +1111,9 @@ class OperationExecutor {
 
       this.highlightElement(document.body, '#00BCD4');
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error(`HTTP请求超时 (${REQUEST_TIMEOUT}ms)`);
+      }
       throw new Error(`HTTP请求失败: ${error.message}`);
     }
   }
@@ -1124,6 +1211,15 @@ class OperationExecutor {
         if (operation.cookiePath) cookieStr += `; path=${operation.cookiePath}`;
         if (operation.cookieMaxAge) cookieStr += `; max-age=${operation.cookieMaxAge}`;
         document.cookie = cookieStr;
+        // 写入后读取验证，确认 cookie 已成功设置
+        const encodedName = encodeURIComponent(name);
+        const verifyMatch = document.cookie
+          .split(';')
+          .map(c => c.trim())
+          .find(c => c.startsWith(encodedName + '='));
+        if (!verifyMatch) {
+          console.warn(`🍪 Cookie 设置可能未生效: ${name}（可能因域名/路径/安全策略限制）`);
+        }
         console.log(`🍪 设置Cookie: ${name}=${value}`);
         break;
       }
@@ -1131,8 +1227,13 @@ class OperationExecutor {
         const name = this.substituteVariables(operation.cookieName || '');
         if (!name) throw new Error('Cookie名称为空');
         const cookies = document.cookie.split(';').reduce((acc, c) => {
-          const [k, v] = c.trim().split('=');
-          acc[decodeURIComponent(k)] = decodeURIComponent(v || '');
+          c = c.trim();
+          if (!c) return acc;
+          // 使用 indexOf 只分割第一个等号，避免值中包含 = 被截断
+          const eqIdx = c.indexOf('=');
+          const k = eqIdx > -1 ? c.substring(0, eqIdx).trim() : c;
+          const v = eqIdx > -1 ? c.substring(eqIdx + 1) : '';
+          acc[decodeURIComponent(k)] = decodeURIComponent(v);
           return acc;
         }, {});
         const value = cookies[name] || '';
@@ -1294,7 +1395,12 @@ class OperationExecutor {
     }
 
     try {
-      const response = await fetch(fileUrl);
+      // 添加 30 秒超时，防止大文件下载无限挂起
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const response = await fetch(fileUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         throw new Error(`获取文件失败 HTTP ${response.status}`);
       }
@@ -1311,6 +1417,9 @@ class OperationExecutor {
       this.highlightElement(element, '#00ACC1');
       console.log(`📁 文件上传完成: ${fileName} (${blob.size} bytes)`);
     } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('文件下载超时 (30000ms)');
+      }
       throw new Error(`文件上传失败: ${error.message}`);
     }
   }
@@ -2946,6 +3055,11 @@ class OperationExecutor {
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
+      // 指数退避：从 50ms 开始，逐步增加到 500ms，减少 CPU 占用
+      const MIN_DELAY = 50;
+      const MAX_DELAY = 500;
+      let currentDelay = MIN_DELAY;
+
       const check = () => {
         if (this.shouldStop) {
           reject(new Error('用户停止执行'));
@@ -2963,7 +3077,9 @@ class OperationExecutor {
           return;
         }
 
-        setTimeout(check, 200);
+        setTimeout(check, currentDelay);
+        // 指数退避，直到最大延迟
+        currentDelay = Math.min(currentDelay * 1.5, MAX_DELAY);
       };
 
       check();
@@ -2974,6 +3090,10 @@ class OperationExecutor {
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
+      const MIN_DELAY = 50;
+      const MAX_DELAY = 500;
+      let currentDelay = MIN_DELAY;
+
       const check = () => {
         if (this.shouldStop) {
           reject(new Error('用户停止执行'));
@@ -2991,7 +3111,8 @@ class OperationExecutor {
           return;
         }
 
-        setTimeout(check, 200);
+        setTimeout(check, currentDelay);
+        currentDelay = Math.min(currentDelay * 1.5, MAX_DELAY);
       };
 
       check();
@@ -3002,6 +3123,10 @@ class OperationExecutor {
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
+      const MIN_DELAY = 50;
+      const MAX_DELAY = 500;
+      let currentDelay = MIN_DELAY;
+
       const check = () => {
         if (this.shouldStop) {
           reject(new Error('用户停止执行'));
@@ -3019,7 +3144,8 @@ class OperationExecutor {
           return;
         }
 
-        setTimeout(check, 200);
+        setTimeout(check, currentDelay);
+        currentDelay = Math.min(currentDelay * 1.5, MAX_DELAY);
       };
 
       check();
@@ -3032,6 +3158,10 @@ class OperationExecutor {
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
+      const MIN_DELAY = 50;
+      const MAX_DELAY = 500;
+      let currentDelay = MIN_DELAY;
+
       const check = () => {
         if (this.shouldStop) {
           reject(new Error('用户停止执行'));
@@ -3075,7 +3205,8 @@ class OperationExecutor {
           return;
         }
 
-        setTimeout(check, 200);
+        setTimeout(check, currentDelay);
+        currentDelay = Math.min(currentDelay * 1.5, MAX_DELAY);
       };
 
       check();
@@ -3104,7 +3235,8 @@ class OperationExecutor {
   findElement(selector) {
     const doc = this.currentDocument || document;
 
-    if (!selector) return doc.body;
+    // 空选择器返回 null，避免误操作 document.body
+    if (!selector) return null;
 
     try {
       let element = doc.querySelector(selector);
@@ -3146,9 +3278,14 @@ class OperationExecutor {
     element.style.transition = 'all 0.3s ease';
 
     setTimeout(() => {
-      element.style.outline = origOutline;
-      element.style.backgroundColor = origBg;
-      element.style.transition = origTransition;
+      try {
+        // 元素可能在高亮期间被移除，需捕获异常
+        element.style.outline = origOutline;
+        element.style.backgroundColor = origBg;
+        element.style.transition = origTransition;
+      } catch (e) {
+        // 元素已被移除，忽略恢复失败
+      }
     }, 2000);
   }
 
