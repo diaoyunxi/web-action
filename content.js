@@ -1616,6 +1616,16 @@ class OperationExecutor {
         if (!/^https?:\/\//i.test(target) && !target.startsWith('//')) {
           target = new URL(target, window.location.href).href;
         }
+        // 协议白名单校验：仅允许 http/https，防止 javascript:/data:/file: 等危险协议
+        try {
+          const parsedTarget = new URL(target);
+          if (!['http:', 'https:'].includes(parsedTarget.protocol)) {
+            throw new Error(`不安全的导航协议: ${parsedTarget.protocol}`);
+          }
+        } catch (e) {
+          if (e.message.includes('不安全的导航协议')) throw e;
+          throw new Error(`无效的导航URL: ${target}`);
+        }
         console.log(`🧭 导航到: ${target}`);
         if (waitLoad) {
           window.location.href = target;
