@@ -1208,7 +1208,8 @@ class OperationExecutor {
       box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-family: -apple-system, sans-serif;
       max-width: 300px; animation: __executor_slide_in__ 0.3s ease;
     `;
-    notif.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${title}</div><div style="font-size:13px;opacity:0.9">${body}</div>`;
+    const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    notif.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${_esc(title)}</div><div style="font-size:13px;opacity:0.9">${_esc(body)}</div>`;
     document.body.appendChild(notif);
     setTimeout(() => {
       notif.style.opacity = '0';
