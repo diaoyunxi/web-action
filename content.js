@@ -9,6 +9,10 @@
  *       正则提取、元素位置、数组操作、滚动到边缘、文本转语音、网络状态
  */
 
+// Debug 日志：开发时设为 true 启用日志输出，生产环境设为 false
+const __WA_DEBUG__ = false;
+const debugLog = (...args) => { if (__WA_DEBUG__) console.log(...args); };
+
 // 用于条件判断操作：抛出该错误将跳过当前循环迭代的剩余操作
 class SkipIterationError extends Error {
   constructor(message = '条件不满足，跳过当前迭代') {
@@ -114,7 +118,7 @@ class OperationExecutor {
     document.addEventListener('mouseout', this.handlePickerOut.bind(this), true);
     document.addEventListener('click', this.handlePickerClick.bind(this), true);
 
-    console.log('🎯 元素拾取模式已启动');
+    debugLog('🎯 元素拾取模式已启动');
   }
 
   stopElementPicker() {
@@ -129,7 +133,7 @@ class OperationExecutor {
     document.removeEventListener('mouseout', this.handlePickerOut.bind(this), true);
     document.removeEventListener('click', this.handlePickerClick.bind(this), true);
 
-    console.log('🎯 元素拾取模式已停止');
+    debugLog('🎯 元素拾取模式已停止');
   }
 
   createPickerOverlay() {
@@ -222,7 +226,7 @@ class OperationExecutor {
         element.id === '__executor_picker_highlight__') return;
 
     const selector = this.generateSelector(element);
-    console.log('✅ 已获取选择器:', selector);
+    debugLog('✅ 已获取选择器:', selector);
 
     // 发送选择器到 popup
     chrome.runtime.sendMessage({
@@ -668,7 +672,7 @@ class OperationExecutor {
           // 已过该时刻，按规则等待到明天同时刻
           console.warn(`⏳ 当前已过 ${rawTime}，将等待到次日同时刻`);
         }
-        console.log(`⏳ 定时等待 ${rawTime}，将等待 ${Math.max(0, targetMs)} ms`);
+        debugLog(`⏳ 定时等待 ${rawTime}，将等待 ${Math.max(0, targetMs)} ms`);
         await this.sleepWithStopCheck(targetMs);
         break;
       }
@@ -681,7 +685,7 @@ class OperationExecutor {
         }
         const delta = maxMs - minMs;
         const duration = delta > 0 ? minMs + Math.floor(Math.random() * (delta + 1)) : minMs;
-        console.log(`⏳ 随机等待 ${duration} ms (范围 ${minMs}-${maxMs})`);
+        debugLog(`⏳ 随机等待 ${duration} ms (范围 ${minMs}-${maxMs})`);
         await this.sleepWithStopCheck(duration);
         break;
       }
@@ -849,7 +853,7 @@ class OperationExecutor {
         operation.selector || ''
       );
 
-      console.log('✅ 脚本执行完成', result !== undefined ? `结果: ${result}` : '');
+      debugLog('✅ 脚本执行完成', result !== undefined ? `结果: ${result}` : '');
 
       // 如果脚本返回值，发送到 popup（添加错误处理）
       if (result !== undefined && result !== null) {
@@ -920,7 +924,7 @@ class OperationExecutor {
 
     // 截取前200字符
     const displayValue = extractedValue.substring(0, 200);
-    console.log(`✅ 提取成功 (${extractType}): ${displayValue}`);
+    debugLog(`✅ 提取成功 (${extractType}): ${displayValue}`);
 
     // 高亮元素
     this.highlightElement(element, '#9C27B0');
@@ -968,7 +972,7 @@ class OperationExecutor {
     const target = document.activeElement || document.body;
     target.dispatchEvent(new KeyboardEvent('keydown', options));
     target.dispatchEvent(new KeyboardEvent('keyup', { ...options }));
-    console.log(`⌨️ 按键: ${key}`);
+    debugLog(`⌨️ 按键: ${key}`);
   }
 
   normalizeKey(key) {
@@ -1033,7 +1037,7 @@ class OperationExecutor {
               console.warn('发送截屏结果失败:', chrome.runtime.lastError.message);
             }
           });
-          console.log(`📷 截屏完成 (${screenshotType})`);
+          debugLog(`📷 截屏完成 (${screenshotType})`);
           resolve();
         } else {
           reject(new Error(response?.error || '截屏失败'));
@@ -1053,12 +1057,12 @@ class OperationExecutor {
       if (operation.clipboardVariable) {
         chrome.runtime.sendMessage({ action: 'storeData', key: operation.clipboardVariable, value });
       }
-      console.log(`📋 已写入剪贴板: ${value.substring(0, 30)}...`);
+      debugLog(`📋 已写入剪贴板: ${value.substring(0, 30)}...`);
     } else {
       const text = await navigator.clipboard.readText();
       const varName = operation.clipboardVariable || 'clipboardContent';
       chrome.runtime.sendMessage({ action: 'storeData', key: varName, value: text });
-      console.log(`📋 已读取剪贴板: ${text.substring(0, 30)}...`);
+      debugLog(`📋 已读取剪贴板: ${text.substring(0, 30)}...`);
     }
   }
 
@@ -1113,7 +1117,7 @@ class OperationExecutor {
       }
 
       const preview = text.substring(0, 200);
-      console.log(`🌐 HTTP ${method} ${url} -> ${response.status} (${preview}...)`);
+      debugLog(`🌐 HTTP ${method} ${url} -> ${response.status} (${preview}...)`);
 
       chrome.runtime.sendMessage({
         action: 'httpRequestResult',
@@ -1149,20 +1153,20 @@ class OperationExecutor {
         const url = this.substituteVariables(operation.tabUrl || '');
         if (!url) throw new Error('标签页URL为空');
         chrome.runtime.sendMessage({ action: 'openTab', url });
-        console.log(`🗂 打开新标签页: ${url}`);
+        debugLog(`🗂 打开新标签页: ${url}`);
         break;
       }
       case 'close':
         chrome.runtime.sendMessage({ action: 'closeCurrentTab' });
-        console.log('🗂 关闭当前标签页');
+        debugLog('🗂 关闭当前标签页');
         break;
       case 'reload':
         window.location.reload();
-        console.log('🗂 重载标签页');
+        debugLog('🗂 重载标签页');
         break;
       case 'focus':
         window.focus();
-        console.log('🗂 聚焦标签页');
+        debugLog('🗂 聚焦标签页');
         break;
       default:
         throw new Error(`未知标签页操作: ${tabAction}`);
@@ -1180,13 +1184,13 @@ class OperationExecutor {
       if (Notification.permission === 'granted') {
         const notif = new Notification(title, { body, icon: chrome.runtime.getURL('icons/icon128.png') });
         setTimeout(() => notif.close(), duration);
-        console.log(`🔔 通知: ${title} - ${body}`);
+        debugLog(`🔔 通知: ${title} - ${body}`);
       } else if (Notification.permission !== 'denied') {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
           const notif = new Notification(title, { body });
           setTimeout(() => notif.close(), duration);
-          console.log(`🔔 通知: ${title} - ${body}`);
+          debugLog(`🔔 通知: ${title} - ${body}`);
         } else {
           throw new Error('通知权限被拒绝');
         }
@@ -1241,7 +1245,7 @@ class OperationExecutor {
         if (!verifyMatch) {
           console.warn(`🍪 Cookie 设置可能未生效: ${name}（可能因域名/路径/安全策略限制）`);
         }
-        console.log(`🍪 设置Cookie: ${name}=${value}`);
+        debugLog(`🍪 设置Cookie: ${name}=${value}`);
         break;
       }
       case 'get': {
@@ -1258,7 +1262,7 @@ class OperationExecutor {
           return acc;
         }, {});
         const value = cookies[name] || '';
-        console.log(`🍪 获取Cookie: ${name}=${value}`);
+        debugLog(`🍪 获取Cookie: ${name}=${value}`);
         if (operation.cookieVariable) {
           chrome.runtime.sendMessage({ action: 'storeData', key: operation.cookieVariable, value });
         }
@@ -1268,7 +1272,7 @@ class OperationExecutor {
         const name = this.substituteVariables(operation.cookieName || '');
         if (!name) throw new Error('Cookie名称为空');
         document.cookie = `${encodeURIComponent(name)}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
-        console.log(`🍪 删除Cookie: ${name}`);
+        debugLog(`🍪 删除Cookie: ${name}`);
         break;
       }
     }
@@ -1305,7 +1309,7 @@ class OperationExecutor {
     }));
 
     this.highlightElement(element, '#FF5722');
-    console.log(`🖱 悬停: ${operation.selector} (${hoverDuration}ms)`);
+    debugLog(`🖱 悬停: ${operation.selector} (${hoverDuration}ms)`);
   }
 
   // ==================== 双击操作 ====================
@@ -1336,7 +1340,7 @@ class OperationExecutor {
     element.dispatchEvent(new MouseEvent('dblclick', opts));
 
     this.highlightElement(element, '#E91E63');
-    console.log(`🖱 双击: ${operation.selector}`);
+    debugLog(`🖱 双击: ${operation.selector}`);
   }
 
   // ==================== 条件判断操作 ====================
@@ -1384,7 +1388,7 @@ class OperationExecutor {
         throw new Error(`未知条件类型: ${conditionType}`);
     }
 
-    console.log(`🔀 条件判断 [${conditionType}]: ${conditionMet ? '满足' : '不满足'}`);
+    debugLog(`🔀 条件判断 [${conditionType}]: ${conditionMet ? '满足' : '不满足'}`);
 
     // skip 模式: 条件不满足时跳过当前迭代剩余操作
     // pass 模式: 条件满足时跳过当前迭代剩余操作 (反向)
@@ -1436,7 +1440,7 @@ class OperationExecutor {
       element.dispatchEvent(new Event('change', { bubbles: true }));
 
       this.highlightElement(element, '#00ACC1');
-      console.log(`📁 文件上传完成: ${fileName} (${blob.size} bytes)`);
+      debugLog(`📁 文件上传完成: ${fileName} (${blob.size} bytes)`);
     } catch (error) {
       if (error.name === 'AbortError') {
         throw new Error('文件下载超时 (30000ms)');
@@ -1460,26 +1464,26 @@ class OperationExecutor {
       case 'set': {
         const value = this.substituteVariables(rawValue);
         this.variables[varName] = value;
-        console.log(`📦 设置变量: ${varName} = ${String(value).substring(0, 50)}`);
+        debugLog(`📦 设置变量: ${varName} = ${String(value).substring(0, 50)}`);
         break;
       }
       case 'clear': {
         delete this.variables[varName];
-        console.log(`📦 清除变量: ${varName}`);
+        debugLog(`📦 清除变量: ${varName}`);
         break;
       }
       case 'increment': {
         const current = parseFloat(this.variables[varName]) || 0;
         const step = parseFloat(this.substituteVariables(rawValue || '1')) || 1;
         this.variables[varName] = String(current + step);
-        console.log(`📦 自增变量: ${varName} = ${this.variables[varName]}`);
+        debugLog(`📦 自增变量: ${varName} = ${this.variables[varName]}`);
         break;
       }
       case 'append': {
         const current = this.variables[varName] !== undefined ? String(this.variables[varName]) : '';
         const value = this.substituteVariables(rawValue);
         this.variables[varName] = current + value;
-        console.log(`📦 追加变量: ${varName} = ${String(this.variables[varName]).substring(0, 50)}`);
+        debugLog(`📦 追加变量: ${varName} = ${String(this.variables[varName]).substring(0, 50)}`);
         break;
       }
       default:
@@ -1515,22 +1519,22 @@ class OperationExecutor {
       case 'set': {
         const attrValue = this.substituteVariables(operation.attrValue || '');
         element.setAttribute(attrName, attrValue);
-        console.log(`🏷 设置属性: ${attrName}="${attrValue}"`);
+        debugLog(`🏷 设置属性: ${attrName}="${attrValue}"`);
         break;
       }
       case 'remove': {
         element.removeAttribute(attrName);
-        console.log(`🏷 移除属性: ${attrName}`);
+        debugLog(`🏷 移除属性: ${attrName}`);
         break;
       }
       case 'toggle': {
         if (element.hasAttribute(attrName)) {
           element.removeAttribute(attrName);
-          console.log(`🏷 切换属性(移除): ${attrName}`);
+          debugLog(`🏷 切换属性(移除): ${attrName}`);
         } else {
           const attrValue = this.substituteVariables(operation.attrValue || '');
           element.setAttribute(attrName, attrValue);
-          console.log(`🏷 切换属性(设置): ${attrName}="${attrValue}"`);
+          debugLog(`🏷 切换属性(设置): ${attrName}="${attrValue}"`);
         }
         break;
       }
@@ -1567,7 +1571,7 @@ class OperationExecutor {
       case 'get': {
         if (!key) throw new Error('存储键名为空');
         const value = storageObj.getItem(key) || '';
-        console.log(`🗄 读取 ${storageType}[${key}]: ${value.substring(0, 50)}`);
+        debugLog(`🗄 读取 ${storageType}[${key}]: ${value.substring(0, 50)}`);
         if (operation.storageVariable) {
           this.variables[operation.storageVariable] = value;
           chrome.runtime.sendMessage({
@@ -1582,18 +1586,18 @@ class OperationExecutor {
         if (!key) throw new Error('存储键名为空');
         const value = this.substituteVariables(operation.storageValue || '');
         storageObj.setItem(key, value);
-        console.log(`🗄 写入 ${storageType}[${key}]: ${value.substring(0, 50)}`);
+        debugLog(`🗄 写入 ${storageType}[${key}]: ${value.substring(0, 50)}`);
         break;
       }
       case 'remove': {
         if (!key) throw new Error('存储键名为空');
         storageObj.removeItem(key);
-        console.log(`🗄 删除 ${storageType}[${key}]`);
+        debugLog(`🗄 删除 ${storageType}[${key}]`);
         break;
       }
       case 'clear': {
         storageObj.clear();
-        console.log(`🗄 清空 ${storageType}`);
+        debugLog(`🗄 清空 ${storageType}`);
         break;
       }
       default:
@@ -1616,7 +1620,7 @@ class OperationExecutor {
         if (!/^https?:\/\//i.test(target) && !target.startsWith('//')) {
           target = new URL(target, window.location.href).href;
         }
-        console.log(`🧭 导航到: ${target}`);
+        debugLog(`🧭 导航到: ${target}`);
         if (waitLoad) {
           window.location.href = target;
         } else {
@@ -1626,17 +1630,17 @@ class OperationExecutor {
       }
       case 'back': {
         history.back();
-        console.log('🧭 后退');
+        debugLog('🧭 后退');
         break;
       }
       case 'forward': {
         history.forward();
-        console.log('🧭 前进');
+        debugLog('🧭 前进');
         break;
       }
       case 'reload': {
         window.location.reload();
-        console.log('🧭 重新加载');
+        debugLog('🧭 重新加载');
         break;
       }
       default:
@@ -1676,35 +1680,35 @@ class OperationExecutor {
       case 'play':
         try {
           await mediaElement.play();
-          console.log('🎬 播放媒体');
+          debugLog('🎬 播放媒体');
         } catch (e) {
           throw new Error(`播放失败: ${e.message}`);
         }
         break;
       case 'pause':
         mediaElement.pause();
-        console.log('⏸ 暂停媒体');
+        debugLog('⏸ 暂停媒体');
         break;
       case 'toggle':
         if (mediaElement.paused) {
           try {
             await mediaElement.play();
-            console.log('🎬 切换为播放');
+            debugLog('🎬 切换为播放');
           } catch (e) {
             throw new Error(`播放失败: ${e.message}`);
           }
         } else {
           mediaElement.pause();
-          console.log('⏸ 切换为暂停');
+          debugLog('⏸ 切换为暂停');
         }
         break;
       case 'mute':
         mediaElement.muted = true;
-        console.log('🔇 静音');
+        debugLog('🔇 静音');
         break;
       case 'unmute':
         mediaElement.muted = false;
-        console.log('🔊 取消静音');
+        debugLog('🔊 取消静音');
         break;
       case 'setVolume': {
         const volume = parseFloat(operation.mediaVolume);
@@ -1712,7 +1716,7 @@ class OperationExecutor {
           throw new Error(`音量值无效 (0-1): ${operation.mediaVolume}`);
         }
         mediaElement.volume = volume;
-        console.log(`🔊 设置音量: ${volume}`);
+        debugLog(`🔊 设置音量: ${volume}`);
         break;
       }
       case 'seek': {
@@ -1722,7 +1726,7 @@ class OperationExecutor {
         }
         try {
           mediaElement.currentTime = seekTime;
-          console.log(`⏩ 跳转到 ${seekTime} 秒`);
+          debugLog(`⏩ 跳转到 ${seekTime} 秒`);
         } catch (e) {
           throw new Error(`跳转失败: ${e.message}`);
         }
@@ -1734,14 +1738,14 @@ class OperationExecutor {
           throw new Error(`播放速率无效 (>0): ${operation.mediaPlaybackRate}`);
         }
         mediaElement.playbackRate = rate;
-        console.log(`⏩ 设置播放速率: ${rate}x`);
+        debugLog(`⏩ 设置播放速率: ${rate}x`);
         break;
       }
       case 'fullscreen':
         if (mediaElement.requestFullscreen) {
           try {
             await mediaElement.requestFullscreen();
-            console.log('🖥 进入全屏');
+            debugLog('🖥 进入全屏');
           } catch (e) {
             throw new Error(`进入全屏失败: ${e.message}`);
           }
@@ -1796,7 +1800,7 @@ class OperationExecutor {
     }
 
     this.highlightElement(element, '#D32F2F');
-    console.log(`🖱 右键点击: ${operation.selector}`);
+    debugLog(`🖱 右键点击: ${operation.selector}`);
   }
 
   // ==================== 元素聚焦操作 ====================
@@ -1820,7 +1824,7 @@ class OperationExecutor {
     element.dispatchEvent(new Event('focusin', { bubbles: true, cancelable: true }));
 
     this.highlightElement(element, '#1976D2');
-    console.log(`🎯 元素聚焦: ${operation.selector}`);
+    debugLog(`🎯 元素聚焦: ${operation.selector}`);
   }
 
   // ==================== 清空输入操作 ====================
@@ -1859,7 +1863,7 @@ class OperationExecutor {
     });
 
     this.highlightElement(element, '#00BCD4');
-    console.log(`🧹 清空输入: ${operation.selector}`);
+    debugLog(`🧹 清空输入: ${operation.selector}`);
   }
 
   // ==================== 滚动到元素操作 ====================
@@ -1881,7 +1885,7 @@ class OperationExecutor {
 
     await this.sleep(behavior === 'smooth' ? 500 : 150);
     this.highlightElement(element, '#00ACC1');
-    console.log(`📍 滚动到元素: ${operation.selector} (block=${block})`);
+    debugLog(`📍 滚动到元素: ${operation.selector} (block=${block})`);
   }
 
   // ==================== 拖拽操作 ====================
@@ -1982,7 +1986,7 @@ class OperationExecutor {
 
     this.highlightElement(sourceEl, '#7B1FA2');
     this.highlightElement(targetEl, '#388E3C');
-    console.log(`🤚 拖拽: ${sourceSelector} → ${targetSelector}`);
+    debugLog(`🤚 拖拽: ${sourceSelector} → ${targetSelector}`);
   }
 
   // ==================== 鼠标滚轮操作 ====================
@@ -2027,7 +2031,7 @@ class OperationExecutor {
     // 给浏览器一点时间处理滚动
     await this.sleep(300);
     this.highlightElement(element, '#F57C00');
-    console.log(`🎰 鼠标滚轮: deltaX=${deltaX}, deltaY=${deltaY} on ${operation.selector || 'window'}`);
+    debugLog(`🎰 鼠标滚轮: deltaX=${deltaX}, deltaY=${deltaY} on ${operation.selector || 'window'}`);
   }
 
   // ==================== 打印日志操作 ====================
@@ -2038,7 +2042,7 @@ class OperationExecutor {
 
     switch (level) {
       case 'info':
-        console.log(`📜 [用户日志] ${message}`);
+        debugLog(`📜 [用户日志] ${message}`);
         break;
       case 'warn':
         console.warn(`📜 [用户日志] ${message}`);
@@ -2050,7 +2054,7 @@ class OperationExecutor {
         console.debug(`📜 [用户日志] ${message}`);
         break;
       default:
-        console.log(`📜 [用户日志] ${message}`);
+        debugLog(`📜 [用户日志] ${message}`);
     }
 
     // 同时发送到 popup 显示
@@ -2083,7 +2087,7 @@ class OperationExecutor {
     switch (hideAction) {
       case 'hide':
         element.style.setProperty('display', 'none', 'important');
-        console.log(`🙈 隐藏元素: ${operation.selector}`);
+        debugLog(`🙈 隐藏元素: ${operation.selector}`);
         break;
       case 'show':
         // 恢复原始样式
@@ -2095,7 +2099,7 @@ class OperationExecutor {
         } else {
           element.style.removeProperty('display');
         }
-        console.log(`👀 显示元素: ${operation.selector}`);
+        debugLog(`👀 显示元素: ${operation.selector}`);
         break;
       case 'toggle':
         if (element.style.display === 'none') {
@@ -2105,10 +2109,10 @@ class OperationExecutor {
           } else {
             element.style.removeProperty('display');
           }
-          console.log(`👀 切换显示元素: ${operation.selector}`);
+          debugLog(`👀 切换显示元素: ${operation.selector}`);
         } else {
           element.style.setProperty('display', 'none', 'important');
-          console.log(`🙈 切换隐藏元素: ${operation.selector}`);
+          debugLog(`🙈 切换隐藏元素: ${operation.selector}`);
         }
         break;
       default:
@@ -2174,7 +2178,7 @@ class OperationExecutor {
       ? ''
       : (typeof current === 'object' ? JSON.stringify(current) : String(current));
 
-    console.log(`🔧 JSON 提取: ${jsonPath} = ${resultStr.substring(0, 80)}`);
+    debugLog(`🔧 JSON 提取: ${jsonPath} = ${resultStr.substring(0, 80)}`);
 
     if (saveVariable) {
       this.variables[saveVariable] = resultStr;
@@ -2223,7 +2227,7 @@ class OperationExecutor {
           throw new Error('无法访问 iframe 文档（可能是跨域限制或 iframe 尚未加载）');
         }
         this.currentDocument = iframeDoc;
-        console.log(`🖼 进入 iframe: ${selector}`);
+        debugLog(`🖼 进入 iframe: ${selector}`);
         break;
       }
       case 'exit': {
@@ -2231,20 +2235,20 @@ class OperationExecutor {
         try {
           if (window.parent && window.parent.document && window.parent.document !== this.currentDocument) {
             this.currentDocument = window.parent.document;
-            console.log('🖼 退出到父级文档');
+            debugLog('🖼 退出到父级文档');
           } else {
             this.currentDocument = document;
-            console.log('🖼 已在主文档，无需退出');
+            debugLog('🖼 已在主文档，无需退出');
           }
         } catch (e) {
           this.currentDocument = document;
-          console.log('🖼 跨域无法访问父文档，回到主文档');
+          debugLog('🖼 跨域无法访问父文档，回到主文档');
         }
         break;
       }
       case 'main': {
         this.currentDocument = document;
-        console.log('🖼 回到主文档');
+        debugLog('🖼 回到主文档');
         break;
       }
       default:
@@ -2278,7 +2282,7 @@ class OperationExecutor {
     }
 
     const varName = operation.countVariable || '';
-    console.log(`🔢 元素计数: ${selector} = ${count}`);
+    debugLog(`🔢 元素计数: ${selector} = ${count}`);
 
     if (varName) {
       this.variables[varName] = String(count);
@@ -2323,7 +2327,7 @@ class OperationExecutor {
       await this.sleep(300);
       document.body.removeChild(a);
 
-      console.log(`⬇ 触发文件下载: ${url}${filename ? ` → ${filename}` : ''}`);
+      debugLog(`⬇ 触发文件下载: ${url}${filename ? ` → ${filename}` : ''}`);
     } catch (error) {
       throw new Error(`文件下载失败: ${error.message}`);
     }
@@ -2374,7 +2378,7 @@ class OperationExecutor {
         throw new Error(`未知页面信息类型: ${infoType}`);
     }
 
-    console.log(`📄 页面信息 [${infoType}]: ${value.substring(0, 80)}`);
+    debugLog(`📄 页面信息 [${infoType}]: ${value.substring(0, 80)}`);
 
     this.variables[varName] = value;
     chrome.runtime.sendMessage({
@@ -2412,12 +2416,12 @@ class OperationExecutor {
       case 'set': {
         const propValue = this.substituteVariables(operation.stylePropertyValue || '');
         element.style.setProperty(propName, propValue);
-        console.log(`🎨 设置样式: ${propName}="${propValue}"`);
+        debugLog(`🎨 设置样式: ${propName}="${propValue}"`);
         break;
       }
       case 'get': {
         const computed = window.getComputedStyle(element).getPropertyValue(propName) || '';
-        console.log(`🎨 获取样式: ${propName}="${computed}"`);
+        debugLog(`🎨 获取样式: ${propName}="${computed}"`);
         const varName = operation.styleVariable || '';
         if (varName) {
           this.variables[varName] = computed;
@@ -2437,7 +2441,7 @@ class OperationExecutor {
       }
       case 'remove': {
         element.style.removeProperty(propName);
-        console.log(`🎨 移除样式: ${propName}`);
+        debugLog(`🎨 移除样式: ${propName}`);
         break;
       }
       default:
@@ -2508,7 +2512,7 @@ class OperationExecutor {
     if (operation.selector) {
       this.highlightElement(element, '#AD1457');
     }
-    console.log(`🎉 触发事件: ${eventType} on ${operation.selector || 'document'}`);
+    debugLog(`🎉 触发事件: ${eventType} on ${operation.selector || 'document'}`);
   }
 
   // ==================== 正则提取操作 ====================
@@ -2566,7 +2570,7 @@ class OperationExecutor {
       console.warn(`🔬 正则未匹配到内容: ${pattern}`);
     }
 
-    console.log(`🔬 正则提取: ${pattern} → "${value.substring(0, 80)}"`);
+    debugLog(`🔬 正则提取: ${pattern} → "${value.substring(0, 80)}"`);
 
     const saveVar = operation.regexSaveVariable || '';
     if (saveVar) {
@@ -2627,14 +2631,14 @@ class OperationExecutor {
       for (const [field, val] of Object.entries(allFields)) {
         storeVar(`${prefix}_${field}`, val);
       }
-      console.log(`📐 元素位置 [all]: 已保存 ${Object.keys(allFields).length} 个变量 (${prefix}_x/y/width/...)`);
+      debugLog(`📐 元素位置 [all]: 已保存 ${Object.keys(allFields).length} 个变量 (${prefix}_x/y/width/...)`);
     } else {
       const val = allFields[infoType];
       if (val === undefined) {
         throw new Error(`未知位置信息类型: ${infoType}`);
       }
       storeVar(prefix, val);
-      console.log(`📐 元素位置 [${infoType}]: ${prefix}=${val}`);
+      debugLog(`📐 元素位置 [${infoType}]: ${prefix}=${val}`);
     }
 
     this.highlightElement(element, '#00897B');
@@ -2714,7 +2718,7 @@ class OperationExecutor {
         arr.push(...items);
         resultLength = arr.length;
         persistArray();
-        console.log(`📚 数组 push: ${arrayName} 长度=${arr.length}`);
+        debugLog(`📚 数组 push: ${arrayName} 长度=${arr.length}`);
         break;
       }
       case 'unshift': {
@@ -2723,7 +2727,7 @@ class OperationExecutor {
         arr.unshift(...items);
         resultLength = arr.length;
         persistArray();
-        console.log(`📚 数组 unshift: ${arrayName} 长度=${arr.length}`);
+        debugLog(`📚 数组 unshift: ${arrayName} 长度=${arr.length}`);
         break;
       }
       case 'pop': {
@@ -2734,7 +2738,7 @@ class OperationExecutor {
         resultLength = arr.length;
         persistArray();
         saveResult(result);
-        console.log(`📚 数组 pop: ${arrayName} → "${String(result).substring(0, 50)}"`);
+        debugLog(`📚 数组 pop: ${arrayName} → "${String(result).substring(0, 50)}"`);
         break;
       }
       case 'shift': {
@@ -2745,14 +2749,14 @@ class OperationExecutor {
         resultLength = arr.length;
         persistArray();
         saveResult(result);
-        console.log(`📚 数组 shift: ${arrayName} → "${String(result).substring(0, 50)}"`);
+        debugLog(`📚 数组 shift: ${arrayName} → "${String(result).substring(0, 50)}"`);
         break;
       }
       case 'length': {
         result = String(arr.length);
         resultLength = arr.length;
         saveResult(result);
-        console.log(`📚 数组 length: ${arrayName} = ${arr.length}`);
+        debugLog(`📚 数组 length: ${arrayName} = ${arr.length}`);
         break;
       }
       case 'join': {
@@ -2760,7 +2764,7 @@ class OperationExecutor {
         result = arr.join(separator);
         resultLength = arr.length;
         saveResult(result);
-        console.log(`📚 数组 join: ${arrayName} → "${result.substring(0, 80)}"`);
+        debugLog(`📚 数组 join: ${arrayName} → "${result.substring(0, 80)}"`);
         break;
       }
       case 'indexOf': {
@@ -2769,7 +2773,7 @@ class OperationExecutor {
         result = String(idx);
         resultLength = arr.length;
         saveResult(result);
-        console.log(`📚 数组 indexOf: ${arrayName} 查找 "${searchValue}" → ${idx}`);
+        debugLog(`📚 数组 indexOf: ${arrayName} 查找 "${searchValue}" → ${idx}`);
         break;
       }
       case 'slice': {
@@ -2780,14 +2784,14 @@ class OperationExecutor {
         result = JSON.stringify(sliced);
         resultLength = sliced.length;
         saveResult(result);
-        console.log(`📚 数组 slice: ${arrayName}(${startIdx}, ${endIdx}) → 长度 ${sliced.length}`);
+        debugLog(`📚 数组 slice: ${arrayName}(${startIdx}, ${endIdx}) → 长度 ${sliced.length}`);
         break;
       }
       case 'clear': {
         arr = [];
         resultLength = 0;
         persistArray();
-        console.log(`📚 数组 clear: ${arrayName}`);
+        debugLog(`📚 数组 clear: ${arrayName}`);
         break;
       }
       default:
@@ -2890,7 +2894,7 @@ class OperationExecutor {
     if (!isWindow) {
       this.highlightElement(scrollTarget, '#1565C0');
     }
-    console.log(`⏫ 滚动到边缘: ${direction} on ${operation.selector || 'window'}`);
+    debugLog(`⏫ 滚动到边缘: ${direction} on ${operation.selector || 'window'}`);
   }
 
   // ==================== 文本转语音操作 ====================
@@ -2967,7 +2971,7 @@ class OperationExecutor {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        console.log(`🔊 朗读完成: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
+        debugLog(`🔊 朗读完成: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`);
         sendResult(true);
         resolve();
       };
@@ -3024,14 +3028,14 @@ class OperationExecutor {
       for (const [field, val] of Object.entries(allFields)) {
         storeVar(`${prefix}_${field}`, val);
       }
-      console.log(`📡 网络状态 [all]: 已保存 ${Object.keys(allFields).length} 个变量 (${prefix}_online/effectiveType/...)`);
+      debugLog(`📡 网络状态 [all]: 已保存 ${Object.keys(allFields).length} 个变量 (${prefix}_online/effectiveType/...)`);
     } else {
       const val = allFields[infoType];
       if (val === undefined) {
         throw new Error(`未知网络信息类型: ${infoType}`);
       }
       storeVar(prefix, val);
-      console.log(`📡 网络状态 [${infoType}]: ${prefix}=${val}`);
+      debugLog(`📡 网络状态 [${infoType}]: ${prefix}=${val}`);
     }
 
     chrome.runtime.sendMessage({
@@ -3056,10 +3060,10 @@ class OperationExecutor {
         sessionStorage.removeItem('__executor_wait_config__');
 
         if (Date.now() - config.timestamp < config.timeout + 5000) {
-          console.log(`⏳ 等待元素: ${config.selector}`);
+          debugLog(`⏳ 等待元素: ${config.selector}`);
           this.waitForElement(config.selector, config.timeout)
             .then(element => {
-              console.log('✅ 等待的元素已出现');
+              debugLog('✅ 等待的元素已出现');
               this.highlightElement(element, '#FF9800');
             })
             .catch(error => {
