@@ -3,6 +3,10 @@
  * 新增: 正则提取、元素位置、数组操作、滚动到边缘、文本转语音、网络状态
  */
 
+// Debug 日志：开发时设为 true 启用日志输出，生产环境设为 false
+const __WA_DEBUG__ = false;
+const debugLog = (...args) => { if (__WA_DEBUG__) console.log(...args); };
+
 class OperationManager {
   constructor() {
     this.operations = [];
@@ -318,7 +322,7 @@ class OperationManager {
       pendingPickerField: this.pendingPickerField
     });
 
-    console.log('✅ 拾取成功:', request.selector);
+    debugLog('✅ 拾取成功:', request.selector);
     this.addLog('success', `拾取成功: ${request.selector}`);
   }
 
@@ -357,68 +361,68 @@ class OperationManager {
   handleExtractResult(request) {
     const valuePreview = request.value.substring(0, 100);
     this.addLog('success', `提取成功 (${request.extractType}): ${valuePreview}${request.value.length > 100 ? '...' : ''}`);
-    console.log('提取结果:', request.value);
+    debugLog('提取结果:', request.value);
   }
 
   handleScriptResult(request) {
     this.addLog('success', `脚本返回: ${request.result}`);
-    console.log('脚本结果:', request.result);
+    debugLog('脚本结果:', request.result);
   }
 
   handleHttpRequestResult(request) {
     const statusEmoji = request.status >= 200 && request.status < 300 ? '✅' : '⚠️';
     this.addLog('info', `HTTP ${request.status} - ${request.url} - ${request.preview?.substring(0, 50)}...`);
-    console.log(`HTTP请求结果: ${request.status}`, request.preview);
+    debugLog(`HTTP请求结果: ${request.status}`, request.preview);
   }
 
   handleLogMessage(request) {
     const level = request.level || 'info';
     const typeMap = { info: 'info', warn: 'warning', error: 'error', debug: 'info' };
     this.addLog(typeMap[level] || 'info', `📜 ${request.message}`);
-    console.log(`用户日志 [${level}]:`, request.message);
+    debugLog(`用户日志 [${level}]:`, request.message);
   }
 
   handleJsonExtractResult(request) {
     const valuePreview = (request.value || '').substring(0, 80);
     this.addLog('success', `JSON 提取 ${request.path}: ${valuePreview}${(request.value || '').length > 80 ? '...' : ''}`);
-    console.log('JSON 提取结果:', request.value);
+    debugLog('JSON 提取结果:', request.value);
   }
 
   handleElementCountResult(request) {
     this.addLog('success', `🔢 元素计数 ${request.selector}: ${request.count}`);
-    console.log('元素计数结果:', request.count);
+    debugLog('元素计数结果:', request.count);
   }
 
   handlePageInfoResult(request) {
     const valuePreview = (request.value || '').substring(0, 80);
     this.addLog('info', `📄 页面信息 [${request.infoType}]: ${valuePreview}`);
-    console.log('页面信息结果:', request.value);
+    debugLog('页面信息结果:', request.value);
   }
 
   handleElementStyleResult(request) {
     this.addLog('success', `🎨 样式 ${request.propertyName}="${request.value}"`);
-    console.log('元素样式结果:', request.value);
+    debugLog('元素样式结果:', request.value);
   }
 
   handleRegexExtractResult(request) {
     const valuePreview = (request.value || '').substring(0, 80);
     this.addLog('success', `🔬 正则提取 ${request.matchIndex !== undefined ? `组${request.matchIndex}` : ''}: ${valuePreview}${(request.value || '').length > 80 ? '...' : ''}`);
-    console.log('正则提取结果:', request.value);
+    debugLog('正则提取结果:', request.value);
   }
 
   handleElementPositionResult(request) {
     this.addLog('success', `📐 元素位置 x=${request.x}, y=${request.y}, w=${request.width}, h=${request.height}`);
-    console.log('元素位置结果:', request);
+    debugLog('元素位置结果:', request);
   }
 
   handleArrayOperationResult(request) {
     this.addLog('success', `📚 数组 ${request.arrayName} ${request.arrayAction} → 长度=${request.length}`);
-    console.log('数组操作结果:', request);
+    debugLog('数组操作结果:', request);
   }
 
   handleNetworkStatusResult(request) {
     this.addLog('info', `📡 网络: ${request.online ? '在线' : '离线'}${request.effectiveType ? ` (${request.effectiveType})` : ''}${request.downlink !== undefined ? ` ↓${request.downlink}Mbps` : ''}${request.rtt !== undefined ? ` RTT${request.rtt}ms` : ''}`);
-    console.log('网络状态结果:', request);
+    debugLog('网络状态结果:', request);
   }
 
   handleTextToSpeechResult(request) {
@@ -437,7 +441,7 @@ class OperationManager {
         return;
       }
     } catch (error) {
-      console.log('Content script 未响应，尝试注入...');
+      debugLog('Content script 未响应，尝试注入...');
     }
 
     try {
@@ -445,7 +449,7 @@ class OperationManager {
         target: { tabId: tab.id },
         files: ['content.js']
       });
-      console.log('Content script 注入成功');
+      debugLog('Content script 注入成功');
       await this.sleep(300);
       await chrome.tabs.sendMessage(tab.id, { action: 'ping' });
     } catch (error) {
@@ -476,7 +480,7 @@ class OperationManager {
           error.message && error.message.includes(msg)
         );
         if (isRetryable) {
-          console.log(`连接失败 (${i + 1}/${maxRetries})，正在重试...`, error.message);
+          debugLog(`连接失败 (${i + 1}/${maxRetries})，正在重试...`, error.message);
           await this.sleep(retryDelay);
         } else {
           throw error;

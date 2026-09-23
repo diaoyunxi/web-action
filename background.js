@@ -2,6 +2,10 @@
  * 网页操作执行器 - 后台服务 v2.2.0
  * 支持: 扩展生命周期、消息转发、快捷键命令、截屏、数据存储、自动更新检查
  */
+// Debug 日志：开发时设为 true 启用日志输出，生产环境设为 false
+const __WA_DEBUG__ = false;
+const debugLog = (...args) => { if (__WA_DEBUG__) console.log(...args); };
+
 
 // 常量定义（移至文件顶部，避免 TDZ 问题）
 const GITHUB_REPO = "diaoyunxi/web-action";
@@ -9,7 +13,7 @@ const UPDATE_ALARM = "update-check";
 
 // 安装/更新时初始化
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log('网页操作执行器已安装/更新', details.reason);
+  debugLog('网页操作执行器已安装/更新', details.reason);
 
   if (details.reason === 'install') {
     chrome.storage.local.set({
@@ -41,7 +45,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 // 标签页更新监听
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete') {
-    console.log(`页面加载完成: ${tab.url}`);
+    debugLog(`页面加载完成: ${tab.url}`);
   }
 });
 
@@ -108,7 +112,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // 快捷键命令监听
 chrome.commands.onCommand.addListener(async (command) => {
-  console.log('收到快捷键命令:', command);
+  debugLog('收到快捷键命令:', command);
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -153,7 +157,7 @@ chrome.commands.onCommand.addListener(async (command) => {
               if (chrome.runtime.lastError) {
                 console.error('执行失败:', chrome.runtime.lastError);
               } else {
-                console.log('快捷键执行成功:', response);
+                debugLog('快捷键执行成功:', response);
               }
             });
           }
@@ -294,7 +298,7 @@ async function checkForUpdate() {
     }
 
     if (!latestVersion) {
-      console.log("Update check: could not determine latest version");
+      debugLog("Update check: could not determine latest version");
       return;
     }
 
@@ -313,7 +317,7 @@ async function checkForUpdate() {
         [`updateUrl_${notificationId}`]: releaseUrl,
       });
     } else {
-      console.log(
+      debugLog(
         `Update check: current version v${currentVersion} is up to date`
       );
     }
