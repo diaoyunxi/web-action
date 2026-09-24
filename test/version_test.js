@@ -8,6 +8,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 const assert = require('assert');
 
 /**
@@ -41,9 +42,10 @@ const src = fs.readFileSync(
 const funcCode = extractFunction(src, 'compareVersions');
 assert(funcCode, '未能从 background.js 提取 compareVersions 函数');
 
-// 在当前模块作用域执行提取出的函数定义，使其可直接调用
-// eslint-disable-next-line no-eval
-eval(funcCode);
+// 使用 vm.runInThisContext 替代 eval：
+// - 不访问本地作用域，仅在全局上下文中定义函数
+// - 避免 eval 的代码注入风险 (CWE-95)
+vm.runInThisContext(funcCode);
 
 let passed = 0;
 let failed = 0;
