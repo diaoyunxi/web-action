@@ -4,7 +4,7 @@
 
 一个功能强大的 Chrome 浏览器扩展，可以在网页中按顺序自动执行多种操作，支持重复执行和条件循环。
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/diaoyunxi/web-action)
+[![Version](https://img.shields.io/badge/version-2.3.1-blue.svg)](https://github.com/diaoyunxi/web-action)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Chrome](https://img.shields.io/badge/chrome-88%2B-brightgreen.svg)](https://www.google.com/chrome/)
 
