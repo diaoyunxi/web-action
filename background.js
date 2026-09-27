@@ -1,5 +1,5 @@
 /**
- * 网页操作执行器 - 后台服务 v2.2.0
+ * 网页操作执行器 - 后台服务 v2.3.1
  * 支持: 扩展生命周期、消息转发、快捷键命令、截屏、数据存储、自动更新检查
  */
 // Debug 日志：开发时设为 true 启用日志输出，生产环境设为 false
@@ -253,6 +253,8 @@ async function checkForUpdate() {
     let releaseUrl = null;
 
     const fetchRelease = async () => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 10000); // 10s timeout
       const resp = await fetch(
         `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
         { signal: AbortSignal.timeout(10000) }
