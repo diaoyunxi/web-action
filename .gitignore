@@ -1,19 +1,25 @@
-# OS
-.DS_Store
-Thumbs.db
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.crx
+*.pem
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-*~
 
-# Node
-node_modules/
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
 *.log
-
-# Build
-dist/
-*.crx
-*.pem
