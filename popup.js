@@ -609,7 +609,7 @@ class OperationManager {
 
   exportConfig() {
     const config = {
-      version: '2.2.0',
+      version: chrome.runtime.getManifest().version,
       exportTime: new Date().toISOString(),
       operations: this.operations,
       repeatSettings: {

@@ -249,6 +249,8 @@ async function checkForUpdate() {
     let releaseUrl = null;
 
     const fetchRelease = async () => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), 10000); // 10s timeout
       const resp = await fetch(
         `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
         { signal: AbortSignal.timeout(10000) }
