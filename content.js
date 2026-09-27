@@ -109,10 +109,13 @@ class OperationExecutor {
     // 创建拾取提示
     this.createPickerOverlay();
 
-    // 添加鼠标事件监听
-    document.addEventListener('mouseover', this.handlePickerHover.bind(this), true);
-    document.addEventListener('mouseout', this.handlePickerOut.bind(this), true);
-    document.addEventListener('click', this.handlePickerClick.bind(this), true);
+    // 添加鼠标事件监听（保存绑定引用，确保 removeEventListener 能正确移除）
+    this._boundPickerHover = this.handlePickerHover.bind(this);
+    this._boundPickerOut = this.handlePickerOut.bind(this);
+    this._boundPickerClick = this.handlePickerClick.bind(this);
+    document.addEventListener('mouseover', this._boundPickerHover, true);
+    document.addEventListener('mouseout', this._boundPickerOut, true);
+    document.addEventListener('click', this._boundPickerClick, true);
 
     console.log('🎯 元素拾取模式已启动');
   }
@@ -124,10 +127,12 @@ class OperationExecutor {
     // 移除拾取提示
     this.removePickerOverlay();
 
-    // 移除鼠标事件监听
-    document.removeEventListener('mouseover', this.handlePickerHover.bind(this), true);
-    document.removeEventListener('mouseout', this.handlePickerOut.bind(this), true);
-    document.removeEventListener('click', this.handlePickerClick.bind(this), true);
+    // 移除鼠标事件监听（使用保存的绑定引用）
+    if (this._boundPickerHover) {
+      document.removeEventListener('mouseover', this._boundPickerHover, true);
+      document.removeEventListener('mouseout', this._boundPickerOut, true);
+      document.removeEventListener('click', this._boundPickerClick, true);
+    }
 
     console.log('🎯 元素拾取模式已停止');
   }
@@ -1208,7 +1213,8 @@ class OperationExecutor {
       box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-family: -apple-system, sans-serif;
       max-width: 300px; animation: __executor_slide_in__ 0.3s ease;
     `;
-    notif.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${title}</div><div style="font-size:13px;opacity:0.9">${body}</div>`;
+    const escapeHtml = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    notif.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${escapeHtml(title)}</div><div style="font-size:13px;opacity:0.9">${escapeHtml(body)}</div>`;
     document.body.appendChild(notif);
     setTimeout(() => {
       notif.style.opacity = '0';
@@ -1615,6 +1621,16 @@ class OperationExecutor {
         let target = url;
         if (!/^https?:\/\//i.test(target) && !target.startsWith('//')) {
           target = new URL(target, window.location.href).href;
+        }
+        // 协议白名单校验：仅允许 http/https，防止 javascript:/data:/file: 等危险协议
+        try {
+          const parsedTarget = new URL(target);
+          if (!['http:', 'https:'].includes(parsedTarget.protocol)) {
+            throw new Error(`不安全的导航协议: ${parsedTarget.protocol}`);
+          }
+        } catch (e) {
+          if (e.message.includes('不安全的导航协议')) throw e;
+          throw new Error(`无效的导航URL: ${target}`);
         }
         console.log(`🧭 导航到: ${target}`);
         if (waitLoad) {
