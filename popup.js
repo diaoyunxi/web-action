@@ -609,7 +609,7 @@ class OperationManager {
 
   exportConfig() {
     const config = {
-      version: '2.2.0',
+      version: '2.3.1',
       exportTime: new Date().toISOString(),
       operations: this.operations,
       repeatSettings: {
