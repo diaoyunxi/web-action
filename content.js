@@ -846,6 +846,11 @@ class OperationExecutor {
     try {
       // 使用严格模式 + 显式参数传递，移除 with 语句以保证作用域安全
       // 仅向用户脚本暴露有限的 API：findElement、sleep、loopIndex、selector
+      // 安全检查：拒绝包含危险 API 的脚本 (CWE-95)
+      const _DANGEROUS_RE = /\b(document\.cookie|localStorage|sessionStorage|navigator\.sendBeacon|import\s*\()\b/;
+      if (_DANGEROUS_RE.test(processedScript)) {
+        throw new Error('脚本包含受限 API，已拒绝执行');
+      }
       const fn = new Function(
         'findElement', 'sleep', 'loopIndex', 'selector',
         `'use strict';\n${processedScript}`
