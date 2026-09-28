@@ -10,6 +10,8 @@ const debugLog = (...args) => { if (__WA_DEBUG__) console.log(...args); };
 // 常量定义（移至文件顶部，避免 TDZ 问题）
 const GITHUB_REPO = "diaoyunxi/web-action";
 const UPDATE_ALARM = "update-check";
+// 网络请求超时时间 (10秒)
+const NETWORK_TIMEOUT_MS = 10000;
 
 // 安装/更新时初始化
 chrome.runtime.onInstalled.addListener((details) => {
