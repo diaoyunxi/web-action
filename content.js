@@ -109,10 +109,16 @@ class OperationExecutor {
     // 创建拾取提示
     this.createPickerOverlay();
 
+    // 缓存 .bind() 结果，确保 removeEventListener 能正确移除
+    // 修复：.bind(this) 每次返回新函数引用，直接传给 add/remove 会导致移除失效
+    this._boundPickerHover = this.handlePickerHover.bind(this);
+    this._boundPickerOut = this.handlePickerOut.bind(this);
+    this._boundPickerClick = this.handlePickerClick.bind(this);
+
     // 添加鼠标事件监听
-    document.addEventListener('mouseover', this.handlePickerHover.bind(this), true);
-    document.addEventListener('mouseout', this.handlePickerOut.bind(this), true);
-    document.addEventListener('click', this.handlePickerClick.bind(this), true);
+    document.addEventListener('mouseover', this._boundPickerHover, true);
+    document.addEventListener('mouseout', this._boundPickerOut, true);
+    document.addEventListener('click', this._boundPickerClick, true);
 
     console.log('🎯 元素拾取模式已启动');
   }
@@ -124,10 +130,21 @@ class OperationExecutor {
     // 移除拾取提示
     this.removePickerOverlay();
 
-    // 移除鼠标事件监听
-    document.removeEventListener('mouseover', this.handlePickerHover.bind(this), true);
-    document.removeEventListener('mouseout', this.handlePickerOut.bind(this), true);
-    document.removeEventListener('click', this.handlePickerClick.bind(this), true);
+    // 移除鼠标事件监听（使用缓存的函数引用）
+    if (this._boundPickerHover) {
+      document.removeEventListener('mouseover', this._boundPickerHover, true);
+    }
+    if (this._boundPickerOut) {
+      document.removeEventListener('mouseout', this._boundPickerOut, true);
+    }
+    if (this._boundPickerClick) {
+      document.removeEventListener('click', this._boundPickerClick, true);
+    }
+
+    // 清理缓存引用
+    this._boundPickerHover = null;
+    this._boundPickerOut = null;
+    this._boundPickerClick = null;
 
     console.log('🎯 元素拾取模式已停止');
   }
