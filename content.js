@@ -3079,6 +3079,7 @@ class OperationExecutor {
           debugLog(`⏳ 等待元素: ${config.selector}`);
           this.waitForElement(config.selector, config.timeout)
             .then(element => {
+            .catch(err => console.error("[WebAction]", err))
               debugLog('✅ 等待的元素已出现');
               this.highlightElement(element, '#FF9800');
             })
