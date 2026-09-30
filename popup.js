@@ -2722,8 +2722,8 @@ class OperationManager {
     }
 
     container.innerHTML = this.logs.slice(-20).reverse().map(log => `
-      <div class="log-item log-${log.type}">
-        <span class="log-time">${log.time}</span>
+      <div class="log-item log-${this.escapeHtml(log.type)}">
+        <span class="log-time">${this.escapeHtml(log.time)}</span>
         <span class="log-msg">${this.escapeHtml(log.message)}</span>
       </div>
     `).join('');
