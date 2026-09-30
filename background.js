@@ -4,7 +4,7 @@
  */
 // Debug 日志：开发时设为 true 启用日志输出，生产环境设为 false
 const __WA_DEBUG__ = false;
-const debugLog = (...args) => { if (__WA_DEBUG__) console.log(...args); };
+const debugLog = (...args) => { if (__WA_DEBUG__) // console.log(...args); };
 
 
 // 常量定义（移至文件顶部，避免 TDZ 问题）
