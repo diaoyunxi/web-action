@@ -657,7 +657,7 @@ class OperationManager {
         // 配置校验：验证版本兼容性
         if (config.version) {
           const configVer = config.version.replace(/^v/, '').split('.')[0];
-          const currentVer = '2.2.0'.split('.')[0];
+          const currentVer = chrome.runtime.getManifest().version.split('.')[0];
           if (parseInt(configVer) > parseInt(currentVer)) {
             throw new Error(`配置版本 (${config.version}) 高于当前扩展版本，可能不兼容`);
           }
