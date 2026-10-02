@@ -1078,6 +1078,34 @@ class OperationExecutor {
     const url = this.substituteVariables(operation.httpUrl || '');
     if (!url) throw new Error('HTTP请求URL为空');
 
+    // SSRF 防护：仅允许 http/https 协议，防止 file://, chrome-extension://, data: 等危险协议
+    try {
+      const parsedUrl = new URL(url);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new Error(`不安全的请求协议: ${parsedUrl.protocol}，仅允许 http/https`);
+      }
+      // 阻止对内网地址的请求
+      const hostname = parsedUrl.hostname;
+      const blockedPatterns = [
+        /^localhost$/i,
+        /^127\.\d+\.\d+\.\d+$/,
+        /^10\.\d+\.\d+\.\d+$/,
+        /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
+        /^192\.168\.\d+\.\d+$/,
+        /^0\.0\.0\.0$/,
+        /^::1$/,
+        /^\[::1\]$/,
+      ];
+      for (const pattern of blockedPatterns) {
+        if (pattern.test(hostname)) {
+          throw new Error(`不安全的请求目标: ${hostname}，禁止访问内网地址`);
+        }
+      }
+    } catch (e) {
+      if (e.message.includes('不安全的')) throw e;
+      throw new Error(`无效的请求URL: ${url}`);
+    }
+
     const headers = {};
     if (operation.httpHeaders) {
       try {
