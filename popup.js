@@ -561,6 +561,9 @@ class OperationManager {
     };
 
     if (typeMap[type]) {
+      // 限制历史记录条数防止 chrome.storage 溢出 (CWE-770)
+      const MAX_LOG_ENTRIES = 500;
+      while (operations.length > MAX_LOG_ENTRIES) { operations.shift(); }
       this.operations.push(typeMap[type]);
       this.saveOperations();
       this.renderOperations();
