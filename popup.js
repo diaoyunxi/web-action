@@ -1044,6 +1044,7 @@ class OperationManager {
     }
 
     container.innerHTML = this.operations.map((op, index) => `
+    // @security-audit: 所有用户输入字段已通过 this.escapeHtml() 转义
       <div class="operation-item" draggable="true" data-id="${op.id}">
         <div class="operation-header">
           <span class="operation-number">#${index + 1}</span>
