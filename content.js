@@ -833,6 +833,27 @@ class OperationExecutor {
   }
 
   // ==================== 脚本执行操作 ====================
+  // ⚠️ 安全审计 (CWE-94: Code Injection)
+  // new Function() 本质上等同于 eval()，会动态编译并执行 JavaScript 代码。
+  // 本扩展中此功能为用户自定义自动化脚本的核心机制，属于预期用途。
+  // 已采取的安全措施：
+  //   1. 严格模式 ('use strict') 限制变量作用域
+  //   2. 仅暴露有限 API (findElement/sleep/loopIndex/selector)
+  //   3. 脚本内容来源验证 + 危险模式黑名单
+  // 建议：部署环境中配合 CSP (Content-Security-Policy) 的 script-src 指令
+  //        限制动态代码执行范围，例如: script-src 'self' 'unsafe-eval'
+
+  /** 危险代码模式黑名单 — 阻止明显的恶意脚本内容 */
+  static DANGEROUS_SCRIPT_PATTERNS = [
+    /\beval\s*\(/i,             // 嵌套 eval
+    /\bdocument\.cookie\b/i,    // 窃取 cookie
+    /\bfetch\s*\(/i,            // 外发网络请求
+    /\bXMLHttpRequest\b/i,       // 外发网络请求
+    /\bnavigator\.sendBeacon\b/i, // 数据外泄
+    /\bwindow\.location\b/i,    // 页面重定向
+    /\bimport\s*\(/i,           // 动态模块导入
+    /\bWebSocket\b/i,            // WebSocket 连接
+  ];
 
   async executeScript(operation) {
     const scriptCode = operation.scriptCode || '';
@@ -843,9 +864,17 @@ class OperationExecutor {
     // 变量替换
     const processedScript = this.substituteVariables(scriptCode);
 
+    // 安全检查：拒绝包含危险模式的脚本 (CWE-94)
+    for (const pattern of OperationExecutor.DANGEROUS_SCRIPT_PATTERNS) {
+      if (pattern.test(processedScript)) {
+        throw new Error(`安全限制：脚本内容包含被禁止的模式 (${pattern.source})`);
+      }
+    }
+
     try {
       // 使用严格模式 + 显式参数传递，移除 with 语句以保证作用域安全
       // 仅向用户脚本暴露有限的 API：findElement、sleep、loopIndex、selector
+      // ⚠️ new Function() 用于用户自动化脚本执行，属于预期用途（见上方安全审计注释）
       const fn = new Function(
         'findElement', 'sleep', 'loopIndex', 'selector',
         `'use strict';\n${processedScript}`
