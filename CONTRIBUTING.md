@@ -1,33 +1,66 @@
 # Contributing
 
-Thank you for your interest in contributing!
+Thank you for considering contributing to this project!
 
 ## How to Contribute
 
-1. **Fork** the repository
-2. **Create a branch** for your feature or fix: `git checkout -b feature/my-feature`
-3. **Make your changes** following the coding conventions of the project
-4. **Test** your changes thoroughly
-5. **Commit** with a clear, descriptive message
-6. **Push** to your fork and **open a Pull Request**
+### Reporting Bugs
 
-## Code Style
+1. Check existing [issues](../../issues) to avoid duplicates
+2. Use the issue template and provide:
+   - Clear description of the bug
+   - Steps to reproduce
+   - Expected vs actual behavior
+   - Environment details (OS, language version, etc.)
+
+### Suggesting Features
+
+1. Open a feature request issue
+2. Describe the use case and motivation
+3. Propose a solution if you have one in mind
+
+### Submitting Pull Requests
+
+1. **Fork** the repository
+2. **Create a branch** from `main` (or `master`): `git checkout -b fix/your-fix`
+3. **Make your changes** with clear, focused commits
+4. **Test** your changes thoroughly
+5. **Submit a PR** with a descriptive title and body
+
+### Code Style
 
 - Follow the existing code style and conventions
-- For Python projects, use `ruff` for linting (see `pyproject.toml` if available)
-- For JavaScript/TypeScript projects, follow the existing formatting
-- Write meaningful commit messages
+- Write clear commit messages
+- Add tests for new features when possible
+- Update documentation if your changes affect the public API
 
-## Reporting Issues
+### Commit Message Format
 
-- Use GitHub Issues to report bugs
-- Include steps to reproduce, expected behavior, and actual behavior
-- For security vulnerabilities, see [SECURITY.md](SECURITY.md)
+```
+type(scope): description
 
-## Pull Request Guidelines
+[optional body]
+```
 
-- Keep PRs focused on a single change
-- Update documentation if applicable
-- Ensure all existing tests pass
-- Add tests for new functionality when possible
+Types: `fix`, `feat`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`
 
+Examples:
+- `fix(auth): prevent timing attack in token comparison`
+- `feat(api): add rate limiting middleware`
+- `docs: update installation instructions`
+
+## Development Setup
+
+1. Clone your fork: `git clone https://github.com/YOUR_USERNAME/REPO_NAME.git`
+2. Install dependencies (see README for instructions)
+3. Create a branch and start coding!
+
+## Code Review
+
+- All PRs require review before merging
+- Address review comments promptly
+- Be respectful and constructive in discussions
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the same license as the project.
