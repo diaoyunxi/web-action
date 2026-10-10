@@ -162,7 +162,7 @@ class OperationExecutor {
       box-shadow: 0 2px 10px rgba(0,0,0,0.3);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
-    overlay.innerHTML = '🎯 点击页面元素获取选择器 | 按 ESC 取消';
+    overlay.textContent = '🎯 点击页面元素获取选择器 | 按 ESC 取消';
     document.body.appendChild(overlay);
 
     // 创建高亮框
