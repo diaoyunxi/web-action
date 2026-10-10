@@ -88,6 +88,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'storeData') {
+    // 大小限制：单个值不超过 1MB，防止恶意数据填满 chrome.storage.local 配额 (10MB)
+    const MAX_VALUE_SIZE = 1048576;
+    try {
+      const valueStr = typeof request.value === 'string' ? request.value : JSON.stringify(request.value);
+      if (valueStr && valueStr.length > MAX_VALUE_SIZE) {
+        sendResponse({ success: false, error: `值大小超过限制 (${MAX_VALUE_SIZE} bytes)` });
+        return true;
+      }
+    } catch (e) {
+      sendResponse({ success: false, error: '值序列化失败' });
+      return true;
+    }
     chrome.storage.local.get(['storedData'], (result) => {
       const storedData = result.storedData || {};
       storedData[request.key] = request.value;
